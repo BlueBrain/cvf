@@ -1,0 +1,6 @@
+[gerrit]
+host=bbpcode.epfl.ch
+port=22
+project=sim/channel-validation-framework
+defaultbranch=master
+defaultremote=origin
