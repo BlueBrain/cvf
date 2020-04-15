@@ -1,0 +1,6 @@
+- project:
+    name: 'channel-validation-framework'
+    git_project: 'sim/channel-validation-framework'
+    jobs:
+      - 'nse.python.{name}.gerrit'
+      - 'nse.python.{name}'
