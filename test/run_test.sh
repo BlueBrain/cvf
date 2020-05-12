@@ -1,13 +1,17 @@
-!/usr/bin/bash
+#!/usr/bin/bash
 
 set -ex
 
-spack install coreneuron@develop neuron@develop
+spack install coreneuron+nmodl+sympy@develop neuron@develop
 
 spack module tcl refresh --y --latest coreneuron
 spack module tcl refresh --y --latest neuron
 
+module av coreneuron neuron
+
 module load coreneuron/develop-parallel neuron/develop-parallel
+
+module list
 
 # Remove svclmp.mod from mod to avoid redefinition of SEClamp in Neuron
 mv mod/svclmp.mod .
