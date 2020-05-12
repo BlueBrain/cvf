@@ -33,4 +33,4 @@ nrnivmodl-core mod
 #unset PMI_RANK
 
 # Run script that launches CoreNEURON with SEClamp call
-mpirun -n 1 ./x86_64/special -python neuron_direct.py -mpi
+srun -N 1 --ntasks-per-node=36 -p prod --account=proj16 --constraint="cpu|nvme" -t 08:00:00 --exclusive --mem=0 -n 1 ./x86_64/special -python neuron_direct.py -mpi
