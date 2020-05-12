@@ -30,7 +30,7 @@ mv svclmp.mod mod
 nrnivmodl-core mod
 
 # For BB%
-unset PMI_RANK
+#unset PMI_RANK
 
 # Run script that launches CoreNEURON with SEClamp call
-./x86_64/special -python neuron_direct.py
+mpirun -n 1 ./x86_64/special -python neuron_direct.py -mpi
