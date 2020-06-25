@@ -1,13 +1,35 @@
+import os
+import shutil
+from enum import Enum, auto
+
 import numpy as np
-from neuron import h
 
 
-def get_step_wave_form(t, v):
+# do not import from neuron
+
+
+class Simulators(Enum):
+    NEURON = auto()
+    CORENEURON = auto()
+
+
+def silent_remove(filename):
+    if os.path.exists(filename):
+        try:
+            if os.path.isfile(filename):
+                os.remove(filename)
+            else:
+                shutil.rmtree(filename)
+        except OSError:
+            pass
+
+
+def get_step_wave_form(t, v, dt):
     vvec = []
     for t, v in zip(t, v):
-        vvec.extend([v] * int(t / h.dt))
+        vvec.extend([v] * int(t / dt))
 
-    tvec = np.linspace(h.dt, len(vvec) * h.dt, len(vvec))
+    tvec = np.linspace(dt, len(vvec) * dt, len(vvec))
 
     return tvec, vvec
 

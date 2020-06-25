@@ -1,10 +1,23 @@
-from neuron import h, gui
 import numpy as np
-from .config_parser import Config
-from .utils import get_V_steps, get_step_wave_form
-from collections import namedtuple
+from neuron import h, gui  # pycharm could remove gui from here. It is needed
+from recordtype import recordtype
 
-RunRecap = namedtuple("RunResult", ["mechanism", "stimulus", "tsteps", "vsteps"])
+from .config_parser import Config
+from .utils import get_V_steps, get_step_wave_form, Simulators
+
+RunResult = recordtype(
+    "RunResult",
+    [
+        "mechanism",
+        "stimulus",
+        "simulator",
+        "t_steps",
+        "v_steps",
+        ("tvec", []),
+        ("trace", []),
+    ],
+    default="",
+)
 
 
 class Cell:
@@ -38,60 +51,69 @@ class Cell:
 
         setattr(self.soma, data["revName"], data["revValue"])
 
-    def run_simulators(self, tvec, vvec):
+    def trace_name(self):
+        return "_ref_" + self.conf.channel_data["current"]
+
+    def run_simulator(self, result):
 
         h.cvode.use_fast_imem(1)
         h.cvode.cache_efficient(1)
 
+        TwaveForm, VwaveForm = get_step_wave_form(result.t_steps, result.v_steps, h.dt)
+
         self.vc.dur1 = h.tstop
-        tvec = h.Vector(tvec)
-        vvec = h.Vector(vvec)
+        TwaveForm = h.Vector(TwaveForm)
+        VwaveForm = h.Vector(VwaveForm)
 
-        vvec.play(self.vc, self.vc._ref_amp1, tvec, 1)
+        VwaveForm.play(self.vc, self.vc._ref_amp1, TwaveForm, 1)
 
-        trec = h.Vector()
-        trec.record(h._ref_t)
+        tvec = h.Vector()
+        tvec.record(h._ref_t)
 
-        irec = h.Vector()
-        irec.record(
-            getattr(self.soma(0.5), "_ref_" + self.conf.channel_data["current"])
-        )
+        trace = h.Vector()
+        trace.record(getattr(self.soma(0.5), self.trace_name()))
 
-        h.init()
-        h.run()
+        if result.simulator == Simulators.NEURON:
+            h.init()
+            h.run()
+        elif result.simulator == Simulators.CORENEURON:
+            pc = h.ParallelContext()
+            h.stdinit()
+            pc.nrncore_run(
+                " -e {} -v {}".format(h.tstop, self.conf.channel_data["v_init"]), 0
+            )
 
-        irec_neuron = np.array(irec).copy()
+        result.tvec = np.array(tvec).copy()
+        result.trace = np.array(trace).copy()
 
-        pc = h.ParallelContext()
-        h.stdinit()
-        pc.nrncore_run(" -e %f -v %f" % (h.tstop, self.conf.channel_data["v_init"]), 0)
-
-        irec_core = np.array(irec).copy()
-
-        return trec, irec_neuron, irec_core
-
-    def run_protocol(self, stimulus):
+    def run_protocol(self, stimulus, simulators):
 
         [t_steps, v_steps_zipped] = self.conf.extract_steps_from_stimulus(stimulus)
         h.tstop = self.conf.stimulus[stimulus]["tstop"]
         v_steps_mat = get_V_steps(v_steps_zipped)
 
-        resMsg = "SUCCESS"
+        results = []
         for v_steps in v_steps_mat:
-            TwaveForm, VwaveForm = get_step_wave_form(t_steps, v_steps)
-            tvec, ivec, ivec_core = self.run_simulators(TwaveForm, VwaveForm)
-
-            rr = RunRecap(self.mechanism, stimulus, t_steps, v_steps)
-            try:
-                np.testing.assert_almost_equal(
-                    np.array(ivec_core), np.array(ivec), err_msg=rr.__str__()
+            result_sim_col = []
+            for simulator in simulators:
+                result_sim_col.append(
+                    RunResult(
+                        mechanism=self.mechanism,
+                        stimulus=stimulus,
+                        simulator=simulator,
+                        t_steps=t_steps,
+                        v_steps=v_steps,
+                    )
                 )
-            except AssertionError as e:
-                resMsg = "FAIL"
-                print(e)
+                self.run_simulator(result_sim_col[-1])
 
-        print("CVF - {} - {}, {} ".format(resMsg, self.mechanism, stimulus))
+            results.append(result_sim_col)
 
-    def run_all_protocols(self):
+        return results
+
+    def run_all_protocols(self, simulators):
+        results = []
         for protocol_name in self.conf.stimulus:
-            self.run_protocol(protocol_name)
+            results += self.run_protocol(protocol_name, simulators)
+
+        return results

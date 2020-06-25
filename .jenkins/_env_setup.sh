@@ -7,6 +7,7 @@ module load unstable
 BUILD_HOME="${WORKSPACE}/BUILD_HOME"
 INSTALL_HOME="${WORKSPACE}/INSTALL_HOME"
 export SPACK_ROOT="${BUILD_HOME}/spack"
+export PKGS_BASE="${SPACK_ROOT}/var/spack/repos/builtin/packages"
 export SPACK_INSTALL_PREFIX="${SPACK_INSTALL_PREFIX:-${INSTALL_HOME}}"
 export SOFTS_DIR_PATH=$SPACK_INSTALL_PREFIX  # Deprecated, but might still be reqd
 export PATH=/usr/bin:$PATH

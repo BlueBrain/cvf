@@ -14,7 +14,8 @@ check_patch_project() (
     if [ "$branch" ]; then
         pkg_file="$PKGS_BASE/$projname/package.py"
         sedexp='/version.*tag=/d'  # Drop tags
-        sedexp="$sedexp; s#branch=[^)]*)#branch='$branch', preferred=True)#g"  # replace branch
+        sedexp="$sedexp; s#branch=[^,]*,#branch='${!BVAR}', preferred=True,#g" # Replace package branch
+        sedexp="$sedexp; s#branch=[^,)]*)#branch='${!BVAR}', preferred=True)#g"
         sed_apply "$pkg_file" "$sedexp"
     fi
 )
@@ -22,12 +23,19 @@ check_patch_project() (
 set -ex
 source ${JENKINS_DIR:-.}/_env_setup.sh
 
+if [ "${ghprbGhRepository}" = "BlueBrain/CoreNeuron" ] && [ "${ghprbSourceBranch}" ]; then
+    CORENEURON_BRANCH="${ghprbSourceBranch}"
+fi
+if [ "${ghprbGhRepository}" = "BlueBrain/nmodl" ] && [ "${ghprbSourceBranch}" ]; then
+    NMODL_BRANCH="${ghprbSourceBranch}"
+fi
+
 check_patch_project coreneuron "$CORENEURON_BRANCH"
 check_patch_project nmodl "$NMODL_BRANCH"
-spack install coreneuron@develop+sympy+nmodl ^nmodl@develop ^bison@3.4.2
+spack install coreneuron@develop+sympy+nmodl~mpi~report ^nmodl@develop ^bison@3.4.2
 
 check_patch_project neuron "$NEURON_BRANCH"
-spack install neuron@develop
+spack install neuron@develop~mpi
 
 source $SPACK_ROOT/share/spack/setup-env.sh
 module av neuron coreneuron

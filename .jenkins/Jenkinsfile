@@ -1,8 +1,9 @@
+
+
 pipeline {
     agent {
         label 'bb5'
     }
-
     parameters {
         string(name: 'SPACK_BRANCH', defaultValue: '',
                description: 'Which branch of spack to use.')
@@ -12,7 +13,6 @@ pipeline {
                description: 'Which branch of coreneuron to use. For master branch (coreneuron@develop) leave this parameter blank.')
         string(name: 'NMODL_BRANCH', defaultValue: '',
                description: 'Which branch of nmodl to use. For master branch (nmodl@master) leave this parameter blank.')
-
     }
 
     environment {
@@ -22,24 +22,25 @@ pipeline {
 
     stages {
 
-        stage('Install Spack'){
+        stage('Spack Setup'){
             steps {
-                sh 'source $WORKSPACE/.jenkins/spack_setup.sh'
+                sh 'source $JENKINS_DIR/spack_setup.sh'
             }
         }
 
-        stage('Spack installations'){
+        stage('Spack Install'){
             steps {
-                sh 'sh $WORKSPACE/.jenkins/spack_install.sh'
+                script {
+                    sh """
+                        source $JENKINS_DIR/spack_install.sh
+                    """
+                }
             }
         }
 
-        stage('Run tests'){
+        stage('Run Tests'){
             steps{
-                sh '''
-                  source ${JENKINS_DIR:-.}/_env_setup.sh
-                  sh $WORKSPACE/run_tests.sh
-                '''
+                sh 'source $JENKINS_DIR/run_tests.sh'
             }
         }
 
