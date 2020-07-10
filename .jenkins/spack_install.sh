@@ -14,8 +14,8 @@ check_patch_project() (
     if [ "$branch" ]; then
         pkg_file="$PKGS_BASE/$projname/package.py"
         sedexp='/version.*tag=/d'  # Drop tags
-        sedexp="$sedexp; s#branch=[^,]*,#branch='${!BVAR}', preferred=True,#g" # Replace package branch
-        sedexp="$sedexp; s#branch=[^,)]*)#branch='${!BVAR}', preferred=True)#g"
+        sedexp="$sedexp; s#branch=[^,]*,#branch='${branch}', preferred=True,#g" # Replace package branch
+        sedexp="$sedexp; s#branch=[^,)]*)#branch='${branch}', preferred=True)#g"
         sed_apply "$pkg_file" "$sedexp"
     fi
 )
