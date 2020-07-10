@@ -38,7 +38,8 @@ class Cell:
 
     def init_config(self):
         self.conf = Config(self.config_file_path)
-        data = self.conf.channel_data
+
+        data = self.conf.data["channel"]
 
         for att_name, att_value in data.items():
             try:
@@ -52,7 +53,7 @@ class Cell:
         setattr(self.soma, data["revName"], data["revValue"])
 
     def trace_name(self):
-        return "_ref_" + self.conf.channel_data["current"]
+        return "_ref_" + self.conf.data["channel"]["current"]
 
     def run_simulator(self, result):
 
@@ -80,7 +81,7 @@ class Cell:
             pc = h.ParallelContext()
             h.stdinit()
             pc.nrncore_run(
-                " -e {} -v {}".format(h.tstop, self.conf.channel_data["v_init"]), 0
+                " -e {} -v {}".format(h.tstop, self.conf.data["channel"]["v_init"]), 0
             )
 
         result.tvec = np.array(tvec).copy()
@@ -89,7 +90,7 @@ class Cell:
     def run_protocol(self, stimulus, simulators):
 
         [t_steps, v_steps_zipped] = self.conf.extract_steps_from_stimulus(stimulus)
-        h.tstop = self.conf.stimulus[stimulus]["tstop"]
+        h.tstop = self.conf.data["stimulus"][stimulus]["tstop"]
         v_steps_mat = get_V_steps(v_steps_zipped)
 
         results = []
@@ -113,7 +114,7 @@ class Cell:
 
     def run_all_protocols(self, simulators):
         results = []
-        for protocol_name in self.conf.stimulus:
+        for protocol_name in self.conf.data["stimulus"]:
             results += self.run_protocol(protocol_name, simulators)
 
         return results

@@ -1,13 +1,12 @@
+import logging
 import os
 import subprocess
 
-import logging
 import numpy as np
 from termcolor import colored
 
-from .utils import silent_remove, Simulators
-from .utils import Simulators
-
+from .config_parser import Config
+from .utils import Simulators, silent_remove
 
 try:
     import matplotlib.pyplot as pplt
@@ -21,7 +20,16 @@ class CompareTestResultsError(Exception):
     pass
 
 
-def cvf_run_and_compare_tests(mod_folder="mod", config_file="configs/kv.in"):
+def cvf_in2yaml(config_folder="config"):
+    for subdir, dirs, files in os.walk(config_folder):
+        for file in files:
+            filepath = subdir + os.sep + file
+            if file.endswith(".in"):
+                config = Config(filepath)
+                config.dump_to_yaml()
+
+
+def cvf_run_and_compare_tests(mod_folder="mod", config_file="config/kv.yaml"):
     simulators = [Simulators.NEURON, Simulators.CORENEURON]
     results = run_tests(
         mod_folder=mod_folder, config_file=config_file, simulators=simulators

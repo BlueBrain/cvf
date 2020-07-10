@@ -1,9 +1,11 @@
 """
-Module to parse Configs
+Module to parse Config
 """
 import logging
+import os
 
 import numpy as np
+import yaml
 
 
 class ConfigParserError(Exception):
@@ -11,14 +13,26 @@ class ConfigParserError(Exception):
 
 
 class Config:
-
-    stimulus = {}
-
     # Read the file and fill config
     # I know there are some if-else. However, with this small number of sections (2)
     # it is ok IMO
+
+    data = {}
+
     def __init__(self, filepath):
-        with open(filepath, "r") as file_iter:
+        self.filepath = filepath
+
+        if filepath.endswith(".in"):
+            self._read_from_in()
+        elif filepath.endswith(".yaml"):
+            self._read_from_yaml()
+
+    def _read_from_yaml(self):
+        with open(self.filepath, "r") as file:
+            self.data = yaml.load(file, Loader=yaml.FullLoader)
+
+    def _read_from_in(self):
+        with open(self.filepath, "r") as file_iter:
             for line in file_iter:
                 parsed_line = line.strip().split()
                 if len(parsed_line) == 0 or parsed_line[0].startswith("#"):
@@ -34,7 +48,7 @@ class Config:
                                     parsed_line[1], str(section_data)
                                 )
                             )
-                        self.channel_data = section_data
+                        self.data["channel"] = section_data
 
                     elif parsed_line[0] == "Stimulus":
                         section_data = self._parse_section(file_iter)
@@ -44,7 +58,10 @@ class Config:
                                     parsed_line[1], str(section_data)
                                 )
                             )
-                        self.stimulus[parsed_line[1]] = section_data
+                        if "stimulus" in self.data:
+                            self.data["stimulus"][parsed_line[1]] = section_data
+                        else:
+                            self.data["stimulus"] = {parsed_line[1]: section_data}
 
                     else:
                         logging.warning("Skipped unknown config section: {}", line)
@@ -52,8 +69,15 @@ class Config:
                 else:
                     raise ConfigParserError("Malformed section: {}".format(line))
 
+    def dump_to_yaml(self, filepath=None):
+        if filepath == None:
+            filepath = os.path.splitext(self.filepath)[0] + ".yaml"
+
+        with open(filepath, "w") as file:
+            yaml.dump(self.data, file)
+
     def __str__(self):
-        return "\n".join(self.__dict__)
+        return "\n filepath: " + self.filepath + "\n\n" + yaml.dump(self.data)
 
     @staticmethod
     def _skip_section(file_iter):
@@ -98,7 +122,7 @@ class Config:
     def extract_steps_from_stimulus(self, stimulus_name):
         t = []
         v = []
-        map0 = self.stimulus[stimulus_name]
+        map0 = self.data["stimulus"][stimulus_name]
 
         # extract tsteps
         n = 1

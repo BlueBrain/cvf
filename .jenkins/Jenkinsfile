@@ -1,5 +1,4 @@
 
-
 pipeline {
     agent {
         label 'bb5'
@@ -30,11 +29,7 @@ pipeline {
 
         stage('Spack Install'){
             steps {
-                script {
-                    sh """
-                        source $JENKINS_DIR/spack_install.sh
-                    """
-                }
+                sh 'source $JENKINS_DIR/spack_install.sh'
             }
         }
 
@@ -43,6 +38,5 @@ pipeline {
                 sh 'source $JENKINS_DIR/run_tests.sh'
             }
         }
-
     }
 }
