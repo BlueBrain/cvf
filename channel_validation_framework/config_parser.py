@@ -19,13 +19,35 @@ class Config:
 
     data = {}
 
-    def __init__(self, filepath):
+    def __init__(self, filepath=None, mod=None):
         self.filepath = filepath
 
-        if filepath.endswith(".in"):
-            self._read_from_in()
-        elif filepath.endswith(".yaml"):
-            self._read_from_yaml()
+        if filepath is None and mod is None:
+            raise ConfigParserError(
+                "No config_file_path nor mod! I do not know how to build this cell!"
+            )
+
+        if filepath is None or not os.path.isfile(filepath):
+            logging.info(
+                "No config file provided or non-existing path. I try to extrapolate the configuration from the mod file..."
+            )
+            self._read_useion_template(mod)
+            logging.info("SUCCESS!")
+        else:
+            if filepath.endswith(".in"):
+                self._read_from_in()
+            elif filepath.endswith(".yaml"):
+                self._read_from_yaml()
+
+    def _read_useion_template(self, mod):
+        # try useion template
+        self.filepath = "./config/template_useion.yaml"
+        self._read_from_yaml()
+
+        # fill the template with mod data
+        self.data["channel"]["suffix"] = mod.data["SUFFIX"]
+        self.data["channel"]["current"] = mod.data["USEION"]["WRITE"][0]
+        self.data["channel"]["revName"] = mod.data["USEION"]["READ"][0]
 
     def _read_from_yaml(self):
         with open(self.filepath, "r") as file:
@@ -38,10 +60,8 @@ class Config:
                 if len(parsed_line) == 0 or parsed_line[0].startswith("#"):
                     continue
                 elif len(parsed_line) == 2:
-
+                    section_data = self._parse_section(file_iter)
                     if parsed_line[0] == "Channel":
-                        self.channel = parsed_line[1]
-                        section_data = self._parse_section(file_iter)
                         if isinstance(section_data, ConfigParserError):
                             raise ConfigParserError(
                                 "Invalid data in Channel {}: {}".format(
@@ -51,7 +71,6 @@ class Config:
                         self.data["channel"] = section_data
 
                     elif parsed_line[0] == "Stimulus":
-                        section_data = self._parse_section(file_iter)
                         if isinstance(section_data, ConfigParserError):
                             raise ConfigParserError(
                                 "Invalid data in Stimulus {}: {}".format(

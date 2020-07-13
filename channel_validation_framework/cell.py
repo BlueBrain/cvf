@@ -3,6 +3,7 @@ from neuron import h, gui  # pycharm could remove gui from here. It is needed
 from recordtype import recordtype
 
 from .config_parser import Config
+from .mod_parser import Mod
 from .utils import get_V_steps, get_step_wave_form, Simulators
 
 RunResult = recordtype(
@@ -21,23 +22,31 @@ RunResult = recordtype(
 
 
 class Cell:
-    def __init__(self, config_file_path, mechanism):
+    def __init__(self, filepath, config_file_path=None):
+        self.filepath = filepath
         self.config_file_path = config_file_path
-        self.mechanism = mechanism
 
         # Set a few basic things
         self.soma = h.Section(name="soma")
         self.soma.insert("pas")
-        # self.vc = h.SEClamp(self.soma(0.5))
         self.vc = h.custom_SEClamp(self.soma(0.5))
         self.vc.rs = 0.001
-        self.soma.insert(self.mechanism)
+
+        # Load mod data and set main mechanism
+        self.init_mod()
 
         # Set data from config file
         self.init_config()
 
+    def init_mod(self):
+        self.mod = Mod(self.filepath)
+
+        self.mechanism = self.mod.data["SUFFIX"]
+        self.soma.insert(self.mechanism)
+
     def init_config(self):
-        self.conf = Config(self.config_file_path)
+
+        self.conf = Config(self.config_file_path, self.mod)
 
         data = self.conf.data["channel"]
 

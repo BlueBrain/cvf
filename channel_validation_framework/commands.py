@@ -29,17 +29,18 @@ def cvf_in2yaml(config_folder="config"):
                 config.dump_to_yaml()
 
 
-def cvf_run_and_compare_tests(mod_folder="mod", config_file="config/kv.yaml"):
-    simulators = [Simulators.NEURON, Simulators.CORENEURON]
-    results = run_tests(
-        mod_folder=mod_folder, config_file=config_file, simulators=simulators
-    )
+def cvf_run_and_compare_tests(mod_folder="mod", config_file=None):
+    results = run_tests(mod_folder=mod_folder, config_file=config_file,)
     compare_test_results(results)
 
     return 0
 
 
-def run_tests(mod_folder, config_file, simulators):
+def run_tests(
+    mod_folder="mod",
+    config_file=None,
+    simulators=[Simulators.NEURON, Simulators.CORENEURON],
+):
 
     silent_remove("enginemech.o")
     silent_remove("nrnivmech_install.sh")
@@ -50,19 +51,14 @@ def run_tests(mod_folder, config_file, simulators):
 
     # Import neuron after nrnivmodl* so that libraries are not loaded twice/not loaded
     from .cell import Cell
-    from .utils import find_first_of_in_file
 
     results = []
     for subdir, dirs, files in os.walk(mod_folder):
         for file in files:
             filepath = subdir + os.sep + file
             if filepath.endswith(".mod") and filepath.find("custom") == -1:
-                f = open(filepath, "r")
-                find_first_of_in_file(f, "NEURON")
-                mechanism_name = find_first_of_in_file(f, "SUFFIX").split()[1]
-                f.close()
 
-                cell0 = Cell(config_file, mechanism_name)
+                cell0 = Cell(filepath, config_file)
                 results.extend(cell0.run_all_protocols(simulators))
 
     return results
