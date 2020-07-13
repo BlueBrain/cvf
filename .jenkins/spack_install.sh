@@ -30,6 +30,9 @@ if [ "${ghprbGhRepository}" = "BlueBrain/nmodl" ] && [ "${ghprbSourceBranch}" ];
     NMODL_BRANCH="${ghprbSourceBranch}"
 fi
 
+
+spack config get modules
+
 check_patch_project coreneuron "$CORENEURON_BRANCH"
 check_patch_project nmodl "$NMODL_BRANCH"
 spack install coreneuron@develop+sympy+nmodl~mpi~report ^nmodl@develop ^bison@3.4.2
@@ -38,4 +41,4 @@ check_patch_project neuron "$NEURON_BRANCH"
 spack install neuron@develop~mpi
 
 source $SPACK_ROOT/share/spack/setup-env.sh
-module av neuron coreneuron
+module av

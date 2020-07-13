@@ -29,7 +29,9 @@ class Config:
 
         if filepath is None or not os.path.isfile(filepath):
             logging.info(
-                "No config file provided or non-existing path. I try to extrapolate the configuration from the mod file..."
+                'Config file not found. Automatic extrapolation from mod file "{}"'.format(
+                    mod.filepath
+                )
             )
             self._read_useion_template(mod)
             logging.info("SUCCESS!")
@@ -45,9 +47,16 @@ class Config:
         self._read_from_yaml()
 
         # fill the template with mod data
-        self.data["channel"]["suffix"] = mod.data["SUFFIX"]
-        self.data["channel"]["current"] = mod.data["USEION"]["WRITE"][0]
-        self.data["channel"]["revName"] = mod.data["USEION"]["READ"][0]
+        try:
+            self.data["channel"]["suffix"] = mod.data["NEURON"]["SUFFIX"]
+            self.data["channel"]["current"] = mod.data["NEURON"]["USEION"]["WRITE"][0]
+            self.data["channel"]["revName"] = mod.data["NEURON"]["USEION"]["READ"][0]
+        except IndexError or KeyError:
+            raise ConfigParserError(
+                'Automatic extrapolation from mod file "{}" not supported'.format(
+                    mod.filepath
+                )
+            )
 
     def _read_from_yaml(self):
         with open(self.filepath, "r") as file:

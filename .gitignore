@@ -13,3 +13,4 @@ doc/build
 venv
 dist
 build
+mod/tmp

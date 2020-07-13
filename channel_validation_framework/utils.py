@@ -13,15 +13,16 @@ class Simulators(Enum):
     CORENEURON = auto()
 
 
-def silent_remove(filename):
-    if os.path.exists(filename):
-        try:
-            if os.path.isfile(filename):
-                os.remove(filename)
-            else:
-                shutil.rmtree(filename)
-        except OSError:
-            pass
+def silent_remove(filenames):
+    for filename in filenames:
+        if os.path.exists(filename):
+            try:
+                if os.path.isfile(filename):
+                    os.remove(filename)
+                else:
+                    shutil.rmtree(filename)
+            except OSError:
+                pass
 
 
 def get_step_wave_form(t, v, dt):
@@ -59,7 +60,43 @@ def normalize(mat, normalize_with_min):
     return mat
 
 
+def smart_merge(map, key, section):
+    if key not in map:
+        map[key] = section
+    elif isinstance(map[key], list):
+        if isinstance(map[key], list):
+            map[key].extend(section)
+        else:
+            map[key].append(section)
+    elif isinstance(map[key], dict):
+        if isinstance(map[key], dict):
+            for k, v in section.items():
+                smart_merge(map[key], k, v)
+        else:
+            smart_merge(map[key], "", section)
+
+
 def find_first_of_in_file(file, keyword):
     for line in file:
         if line.strip().startswith(keyword):
             return line
+
+
+def copy_to_working_dir(srcs, dst, ext=None):
+    copy_log = set()
+    for src in srcs:
+        if os.path.exists(src):
+            try:
+                if os.path.isfile(src) and (
+                    ext is None or os.path.splitext(src)[1] == ext
+                ):
+                    copy_log.add(shutil.copyfile(src, dst))
+                elif os.path.isdir(src):
+                    for subdir, dirs, files in os.walk(src):
+                        for file in files:
+                            if ext is None or os.path.splitext(file)[1] == ext:
+                                copy_log.add(shutil.copy(subdir + os.sep + file, dst))
+            except OSError:
+                pass
+
+    return copy_log

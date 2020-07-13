@@ -1,17 +1,19 @@
 import logging
 import os
 import subprocess
+import sys
 
 import numpy as np
 from termcolor import colored
 
 from .config_parser import Config
-from .utils import Simulators, silent_remove
+from .utils import Simulators, silent_remove, copy_to_working_dir
 
 try:
     import matplotlib.pyplot as pplt
 except ImportError:
     logging.warning("Matplotlib could no be found. Proceeding without plots...")
+
 
 # do not import from neuron
 
@@ -29,36 +31,63 @@ def cvf_in2yaml(config_folder="config"):
                 config.dump_to_yaml()
 
 
-def cvf_run_and_compare_tests(mod_folder="mod", config_file=None):
-    results = run_tests(mod_folder=mod_folder, config_file=config_file,)
+def cvf_stdrun():
+
+    config_file = sys.argv[1] if len(sys.argv) > 1 else ""
+    additional_mod_folders = sys.argv[3:] if len(sys.argv) > 3 else []
+
+    results = run_tests(
+        config_file=config_file, additional_mod_folders=additional_mod_folders,
+    )
+
     compare_test_results(results)
 
     return 0
 
 
 def run_tests(
-    mod_folder="mod",
     config_file=None,
+    additional_mod_folders=[],
     simulators=[Simulators.NEURON, Simulators.CORENEURON],
+    working_dir="mod/tmp",
 ):
+    # we want to print the info
+    logging.getLogger().setLevel(logging.INFO)
 
-    silent_remove("enginemech.o")
-    silent_remove("nrnivmech_install.sh")
-    silent_remove("x86_64")
+    # clean the state
+    silent_remove(["enginemech.o", "nrnivmech_install.sh", "x86_64", working_dir])
+    os.mkdir(working_dir)
 
-    subprocess.call(["nrnivmodl", mod_folder])
-    subprocess.call(["nrnivmodl-core", mod_folder])
+    # we add the custom cvf mod files
+    additional_mod_folders.append("mod/cvf")
+    additional_mod_folders.append("mod/local")
+    copy_to_working_dir_log = copy_to_working_dir(
+        additional_mod_folders, working_dir, ".mod"
+    )
+    logging.info(
+        "The following files were copied in '%s': \n%s",
+        working_dir,
+        "".join(copy_to_working_dir_log),
+    )
+
+    # call the compilers
+    subprocess.call(["nrnivmodl", working_dir])
+    subprocess.call(["nrnivmodl-core", working_dir])
 
     # Import neuron after nrnivmodl* so that libraries are not loaded twice/not loaded
     from .cell import Cell
 
     results = []
-    for subdir, dirs, files in os.walk(mod_folder):
+    for subdir, dirs, files in os.walk(working_dir):
         for file in files:
             filepath = subdir + os.sep + file
-            if filepath.endswith(".mod") and filepath.find("custom") == -1:
+            if filepath.endswith(".mod") and filepath.find("cvf") == -1:
+                try:
+                    cell0 = Cell(filepath, config_file)
+                except Exception as e:
+                    results.append(e)
+                    continue
 
-                cell0 = Cell(filepath, config_file)
                 results.extend(cell0.run_all_protocols(simulators))
 
     return results
@@ -69,6 +98,12 @@ def compare_test_results(results, rtol=1e-7, atol=0.0, verbose=2):
 
     remove_duplicate_log = set()
     for result_all_sim in results:
+
+        # avoid mechanisms that are not supported
+        if isinstance(result_all_sim, Exception):
+            print("CVF - {}, {}".format(colored("FAIL", "red"), str(result_all_sim)))
+            is_error = True
+            continue
 
         # check meaningful comparison
         assert len(result_all_sim) == 2
@@ -116,7 +151,6 @@ def compare_test_results(results, rtol=1e-7, atol=0.0, verbose=2):
 
 
 def plot_test_results(results):
-
     remove_duplicate_log = set()
     colors = {Simulators.NEURON: "r", Simulators.CORENEURON: "b"}
 

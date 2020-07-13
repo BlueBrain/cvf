@@ -25,7 +25,7 @@ ENDCOMMENT
 DEFINE NSTEP 3
 
 NEURON {
-	POINT_PROCESS custom_SEClamp
+	POINT_PROCESS cvf_svclamp
 	ELECTRODE_CURRENT i
 	RANGE dur1, amp1, dur2, amp2, dur3, amp3, rs, vc, i
 }

@@ -29,7 +29,7 @@ class Cell:
         # Set a few basic things
         self.soma = h.Section(name="soma")
         self.soma.insert("pas")
-        self.vc = h.custom_SEClamp(self.soma(0.5))
+        self.vc = h.cvf_svclamp(self.soma(0.5))
         self.vc.rs = 0.001
 
         # Load mod data and set main mechanism
@@ -41,7 +41,8 @@ class Cell:
     def init_mod(self):
         self.mod = Mod(self.filepath)
 
-        self.mechanism = self.mod.data["SUFFIX"]
+        self.mechanism = self.mod.data["NEURON"]["SUFFIX"][0]
+
         self.soma.insert(self.mechanism)
 
     def init_config(self):
@@ -89,6 +90,7 @@ class Cell:
         elif result.simulator == Simulators.CORENEURON:
             pc = h.ParallelContext()
             h.stdinit()
+
             pc.nrncore_run(
                 " -e {} -v {}".format(h.tstop, self.conf.data["channel"]["v_init"]), 0
             )
