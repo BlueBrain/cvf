@@ -32,7 +32,7 @@ fi
 
 check_patch_project coreneuron "$CORENEURON_BRANCH"
 check_patch_project nmodl "$NMODL_BRANCH"
-spack install coreneuron@develop+sympy+nmodl~mpi~report ^nmodl@develop ^bison@3.4.2
+spack install -v coreneuron@develop+sympy+nmodl~mpi~report ^nmodl@develop ^bison@3.4.2
 
 check_patch_project neuron "$NEURON_BRANCH"
 spack install neuron@develop~mpi

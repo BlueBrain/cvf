@@ -22,6 +22,12 @@ pipeline {
 
     stages {
 
+        stage('Extra Test'){
+            steps {
+                echo 'Test Test'
+            }
+        }
+
         stage('Spack Setup'){
             steps {
                 sh 'source $JENKINS_DIR/spack_setup.sh'
