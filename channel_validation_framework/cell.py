@@ -1,6 +1,7 @@
 import numpy as np
 from neuron import h, gui  # pycharm could remove gui from here. It is needed
 from recordtype import recordtype
+import os
 
 from .config_parser import Config
 from .mod_parser import Mod
@@ -25,7 +26,6 @@ class Cell:
     def __init__(self, filepath, config_file_path=None):
         self.filepath = filepath
         self.config_file_path = config_file_path
-
         # Set a few basic things
         self.soma = h.Section(name="soma")
         self.soma.insert("pas")
@@ -87,7 +87,8 @@ class Cell:
         if result.simulator == Simulators.NEURON:
             h.init()
             h.run()
-        elif result.simulator == Simulators.CORENEURON:
+        else:
+
             pc = h.ParallelContext()
             h.stdinit()
 
@@ -98,7 +99,7 @@ class Cell:
         result.tvec = np.array(tvec).copy()
         result.trace = np.array(trace).copy()
 
-    def run_protocol(self, stimulus, simulators):
+    def run_protocol(self, stimulus, simulator):
 
         [t_steps, v_steps_zipped] = self.conf.extract_steps_from_stimulus(stimulus)
         h.tstop = self.conf.data["stimulus"][stimulus]["tstop"]
@@ -106,26 +107,22 @@ class Cell:
 
         results = []
         for v_steps in v_steps_mat:
-            result_sim_col = []
-            for simulator in simulators:
-                result_sim_col.append(
-                    RunResult(
-                        mechanism=self.mechanism,
-                        stimulus=stimulus,
-                        simulator=simulator,
-                        t_steps=t_steps,
-                        v_steps=v_steps,
-                    )
+            results.append(
+                RunResult(
+                    mechanism=self.mechanism,
+                    stimulus=stimulus,
+                    simulator=simulator,
+                    t_steps=t_steps,
+                    v_steps=v_steps,
                 )
-                self.run_simulator(result_sim_col[-1])
-
-            results.append(result_sim_col)
+            )
+            self.run_simulator(results[-1])
 
         return results
 
-    def run_all_protocols(self, simulators):
+    def run_all_protocols(self, simulator):
         results = []
         for protocol_name in self.conf.data["stimulus"]:
-            results += self.run_protocol(protocol_name, simulators)
+            results += self.run_protocol(protocol_name, simulator)
 
         return results

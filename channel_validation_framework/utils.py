@@ -4,25 +4,32 @@ from enum import Enum, auto
 
 import numpy as np
 
+import glob
+
 
 # do not import from neuron
 
 
 class Simulators(Enum):
     NEURON = auto()
-    CORENEURON = auto()
+    CORENEURON_NMODLSYMPY_ANALYTIC = auto()
+    CORENEURON_NMODLSYMPY_PADE = auto()
+    CORENEURON_NMODLSYMPY_CSE = auto()
+    CORENEURON_NMODLSYMPY_CONDUCTANCEC = auto()
 
 
-def silent_remove(filenames):
-    for filename in filenames:
-        if os.path.exists(filename):
-            try:
-                if os.path.isfile(filename):
-                    os.remove(filename)
-                else:
-                    shutil.rmtree(filename)
-            except OSError:
-                pass
+def silent_remove(dirs):
+    for dir in dirs:
+        filenames = glob.glob(dir)
+        for filename in filenames:
+            if os.path.exists(filename):
+                try:
+                    if os.path.isfile(filename):
+                        os.remove(filename)
+                    else:
+                        shutil.rmtree(filename)
+                except OSError:
+                    pass
 
 
 def get_step_wave_form(t, v, dt):

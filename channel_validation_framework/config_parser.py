@@ -43,7 +43,7 @@ class Config:
 
     def _read_useion_template(self, mod):
         # try useion template
-        self.filepath = "./config/template_useion.yaml"
+        self.filepath = "config" + os.sep + "template_useion.yaml"
         self._read_from_yaml()
 
         # fill the template with mod data
