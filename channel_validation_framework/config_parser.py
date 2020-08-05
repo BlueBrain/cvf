@@ -21,6 +21,7 @@ class Config:
 
     def __init__(self, filepath=None, mod=None):
         self.filepath = filepath
+        self.mod = mod
 
         if filepath is None and mod is None:
             raise ConfigParserError(
@@ -33,28 +34,42 @@ class Config:
                     mod.filepath
                 )
             )
-            self._read_useion_template(mod)
+            self._autogenerate()
             logging.info("SUCCESS!")
         else:
             if filepath.endswith(".in"):
-                self._read_from_in()
+                self._read_raw_in()
+                self._purify_raw_in()
             elif filepath.endswith(".yaml"):
                 self._read_from_yaml()
 
-    def _read_useion_template(self, mod):
+    def _autogenerate(self):
         # try useion template
-        self.filepath = "./config/template_useion.yaml"
+        self.filepath = "config" + os.sep + "template_useion.yaml"
         self._read_from_yaml()
+        self._fill_useion_template()
 
+    def _fill_useion_template(self):
         # fill the template with mod data
         try:
-            self.data["channel"]["suffix"] = mod.data["NEURON"]["SUFFIX"]
-            self.data["channel"]["current"] = mod.data["NEURON"]["USEION"]["WRITE"][0]
-            self.data["channel"]["revName"] = mod.data["NEURON"]["USEION"]["READ"][0]
+            self.data["channel"]["SUFFIX"] = self.mod.data["NEURON"]["SUFFIX"]
+            if "WRITE" in self.mod.data["NEURON"]["USEION"]:
+                self.data["channel"]["USEION"]["WRITE"] = self.mod.data["NEURON"][
+                    "USEION"
+                ]["WRITE"]
+            if "READ" in self.mod.data["NEURON"]["USEION"]:
+                self.data["channel"]["USEION"]["READ"] = dict(
+                    zip(
+                        self.mod.data["NEURON"]["USEION"]["READ"],
+                        [self.data["channel"]["USEION"]["READ"]]
+                        * len(self.mod.data["NEURON"]["USEION"]["READ"]),
+                    )
+                )
+
         except IndexError or KeyError:
             raise ConfigParserError(
                 'Automatic extrapolation from mod file "{}" not supported'.format(
-                    mod.filepath
+                    self.mod.filepath
                 )
             )
 
@@ -62,7 +77,7 @@ class Config:
         with open(self.filepath, "r") as file:
             self.data = yaml.load(file, Loader=yaml.FullLoader)
 
-    def _read_from_in(self):
+    def _read_raw_in(self):
         with open(self.filepath, "r") as file_iter:
             for line in file_iter:
                 parsed_line = line.strip().split()
@@ -96,6 +111,29 @@ class Config:
                         self._skip_section(file_iter)
                 else:
                     raise ConfigParserError("Malformed section: {}".format(line))
+
+    # Rules for converting to std format
+    def _purify_raw_in(self):
+
+        # suffix
+        try:
+            self.data["channel"]["SUFFIX"] = self.data["channel"].pop("suffix")
+        except KeyError:
+            pass
+
+        # useion
+        try:
+            read = {self.data["channel"]["revName"]: self.data["channel"]["revValue"]}
+            write = [self.data["channel"]["current"]]
+            self.data["channel"]["USEION"] = {"READ": read, "WRITE": write}
+
+            del [
+                self.data["channel"]["revName"],
+                self.data["channel"]["revValue"],
+                self.data["channel"]["current"],
+            ]
+        except KeyError:
+            pass
 
     def dump_to_yaml(self, filepath=None):
         if filepath == None:

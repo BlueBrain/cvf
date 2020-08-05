@@ -1,6 +1,7 @@
 import numpy as np
 from neuron import h, gui  # pycharm could remove gui from here. It is needed
 from recordtype import recordtype
+import os
 
 from .config_parser import Config
 from .mod_parser import Mod
@@ -15,7 +16,7 @@ RunResult = recordtype(
         "t_steps",
         "v_steps",
         ("tvec", []),
-        ("trace", []),
+        ("traces", {}),
     ],
     default="",
 )
@@ -26,32 +27,22 @@ class Cell:
         self.filepath = filepath
         self.config_file_path = config_file_path
 
+        # Load mod data and set main mechanism
+        self.mod = Mod(self.filepath)
+        # Set data from config file
+        self.conf = Config(self.config_file_path, self.mod)
+
+        self._set_cell()
+
+    def _set_cell(self):
         # Set a few basic things
         self.soma = h.Section(name="soma")
         self.soma.insert("pas")
         self.vc = h.cvf_svclamp(self.soma(0.5))
         self.vc.rs = 0.001
+        # Some keywords in channel could be inserted in h or soma directly
+        for att_name, att_value in self.conf.data["channel"].items():
 
-        # Load mod data and set main mechanism
-        self.init_mod()
-
-        # Set data from config file
-        self.init_config()
-
-    def init_mod(self):
-        self.mod = Mod(self.filepath)
-
-        self.mechanism = self.mod.data["NEURON"]["SUFFIX"][0]
-
-        self.soma.insert(self.mechanism)
-
-    def init_config(self):
-
-        self.conf = Config(self.config_file_path, self.mod)
-
-        data = self.conf.data["channel"]
-
-        for att_name, att_value in data.items():
             try:
                 setattr(self.soma, att_name, att_value)
             except Exception:
@@ -59,11 +50,41 @@ class Cell:
                     setattr(h, att_name, att_value)
                 except Exception:
                     pass
+        # mechanism
+        self.mechanism = self.mod.data["NEURON"]["SUFFIX"][0]
+        self.soma.insert(self.mechanism)
+        # try useion
+        try:
+            for key, value in self.conf.data["channel"]["USEION"]["READ"]:
+                setattr(self.soma, key, value)
+        except:
+            pass
 
-        setattr(self.soma, data["revName"], data["revValue"])
+    @staticmethod
+    def trace_name(name):
+        return "_ref_{}".format(name)
 
-    def trace_name(self):
-        return "_ref_" + self.conf.data["channel"]["current"]
+    def _set_traces(self):
+        traces = {}
+        try:
+            for name in self.conf.data["channel"]["USEION"]["WRITE"]:
+                new_trace = h.Vector()
+                new_trace.record(getattr(self.soma(0.5), self.trace_name(name)))
+                traces[name] = new_trace
+        except KeyError:
+            pass
+
+        i_mem = h.Vector()
+        i_mem.record(self.soma(0.5)._ref_i_membrane_)
+        traces["i_membrane_"] = i_mem
+
+        return traces
+
+    def _get_traces(self, traces):
+        out = {}
+        for key, val in traces.items():
+            out[key] = np.array(val).copy()
+        return out
 
     def run_simulator(self, result):
 
@@ -81,13 +102,13 @@ class Cell:
         tvec = h.Vector()
         tvec.record(h._ref_t)
 
-        trace = h.Vector()
-        trace.record(getattr(self.soma(0.5), self.trace_name()))
+        # start recording
+        traces = self._set_traces()
 
         if result.simulator == Simulators.NEURON:
             h.init()
             h.run()
-        elif result.simulator == Simulators.CORENEURON:
+        else:
             pc = h.ParallelContext()
             h.stdinit()
 
@@ -96,9 +117,9 @@ class Cell:
             )
 
         result.tvec = np.array(tvec).copy()
-        result.trace = np.array(trace).copy()
+        result.traces = self._get_traces(traces)
 
-    def run_protocol(self, stimulus, simulators):
+    def run_protocol(self, stimulus, simulator):
 
         [t_steps, v_steps_zipped] = self.conf.extract_steps_from_stimulus(stimulus)
         h.tstop = self.conf.data["stimulus"][stimulus]["tstop"]
@@ -106,26 +127,22 @@ class Cell:
 
         results = []
         for v_steps in v_steps_mat:
-            result_sim_col = []
-            for simulator in simulators:
-                result_sim_col.append(
-                    RunResult(
-                        mechanism=self.mechanism,
-                        stimulus=stimulus,
-                        simulator=simulator,
-                        t_steps=t_steps,
-                        v_steps=v_steps,
-                    )
+            results.append(
+                RunResult(
+                    mechanism=self.mechanism,
+                    stimulus=stimulus,
+                    simulator=simulator,
+                    t_steps=t_steps,
+                    v_steps=v_steps,
                 )
-                self.run_simulator(result_sim_col[-1])
-
-            results.append(result_sim_col)
+            )
+            self.run_simulator(results[-1])
 
         return results
 
-    def run_all_protocols(self, simulators):
+    def run_all_protocols(self, simulator):
         results = []
         for protocol_name in self.conf.data["stimulus"]:
-            results += self.run_protocol(protocol_name, simulators)
+            results += self.run_protocol(protocol_name, simulator)
 
         return results

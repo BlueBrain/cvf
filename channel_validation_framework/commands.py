@@ -1,16 +1,18 @@
 import logging
-import os
 import subprocess
 import sys
+from itertools import cycle
+from multiprocessing import Process, Queue
 
 import numpy as np
 from termcolor import colored
 
 from .config_parser import Config
-from .utils import Simulators, silent_remove, copy_to_working_dir
+from .utils import *
 
 try:
     import matplotlib.pyplot as pplt
+    from matplotlib import colors
 except ImportError:
     logging.warning("Matplotlib could no be found. Proceeding without plots...")
 
@@ -36,33 +38,76 @@ def cvf_stdrun():
     config_file = sys.argv[1] if len(sys.argv) > 1 else ""
     additional_mod_folders = sys.argv[3:] if len(sys.argv) > 3 else []
 
-    results = run_tests(
+    results = run(
         config_file=config_file, additional_mod_folders=additional_mod_folders,
     )
 
-    compare_test_results(results)
+    compare(results)
 
     return 0
 
 
-def run_tests(
+def run(
     config_file=None,
     additional_mod_folders=[],
-    simulators=[Simulators.NEURON, Simulators.CORENEURON],
-    working_dir="mod/tmp",
+    simulators={Simulators.NEURON, Simulators.CORENEURON_NMODLSYMPY_ANALYTIC,},
+    base_working_dir="tmp",
+    fail_on_cell_generation=False,
 ):
+    if isinstance(additional_mod_folders, str):
+        additional_mod_folders = [additional_mod_folders]
+
+    # clear the state
+    silent_remove([base_working_dir + "_*"])
+
+    if config_file:
+        config_file = os.path.abspath(config_file)
+
+    results = {}
+    jobs = []
+    for simulator in simulators:
+        q = Queue()
+        p = Process(
+            target=_worker_run,
+            args=(
+                config_file,
+                additional_mod_folders,
+                simulator,
+                base_working_dir,
+                fail_on_cell_generation,
+                q,
+            ),
+        )
+        jobs.append(p)
+        p.start()
+        results[simulator] = q.get()
+
+    for p in jobs:
+        p.join()
+
+    return results
+
+
+def _worker_run(
+    config_file,
+    additional_mod_folders,
+    simulator,
+    base_working_dir,
+    fail_on_cell_generation,
+    queue,
+):
+
     # we want to print the info
     logging.getLogger().setLevel(logging.INFO)
 
-    # clean the state
-    silent_remove(["enginemech.o", "nrnivmech_install.sh", "x86_64", working_dir])
-    os.mkdir(working_dir)
+    working_dir = "{}_{}_{}".format(base_working_dir, simulator.name, str(os.getpid()))
+    os.makedirs(working_dir + os.sep + "mod")
 
     # we add the custom cvf mod files
-    additional_mod_folders.append("mod/cvf")
-    additional_mod_folders.append("mod/local")
+    additional_mod_folders.append("mod" + os.sep + "cvf")
+    additional_mod_folders.append("mod" + os.sep + "local")
     copy_to_working_dir_log = copy_to_working_dir(
-        additional_mod_folders, working_dir, ".mod"
+        additional_mod_folders, working_dir + os.sep + "mod", ".mod"
     )
     logging.info(
         "The following files were copied in '%s': \n%s",
@@ -71,78 +116,113 @@ def run_tests(
     )
 
     # call the compilers
-    subprocess.call(["nrnivmodl", working_dir])
-    subprocess.call(["nrnivmodl-core", working_dir])
+    subprocess.run(["nrnivmodl", "mod"], cwd=working_dir)
+    if simulator is not Simulators.NEURON:
+        # TODO: add support for compiling with different sympy options
+        subprocess.run(["nrnivmodl-core", "mod"], cwd=working_dir)
 
-    # Import neuron after nrnivmodl* so that libraries are not loaded twice/not loaded
+    # Import libraries since they are not in the standard
+    from neuron import h
+
+    h.nrn_load_dll(
+        os.path.abspath(
+            glob.glob(
+                working_dir
+                + os.sep
+                + "x86_64"
+                + os.sep
+                + ".libs"
+                + os.sep
+                + "libnrnmech.*"
+            )[0]
+        )
+    )
+
+    if simulator is not Simulators.NEURON:
+        os.environ["CORENEURONLIB"] = os.path.abspath(
+            glob.glob(
+                working_dir
+                + os.sep
+                + "x86_64"
+                + os.sep
+                + ".libs"
+                + os.sep
+                + "libcorenrnmech.*"
+            )[0]
+        )
+
     from .cell import Cell
 
     results = []
-    for subdir, dirs, files in os.walk(working_dir):
+    for subdir, dirs, files in os.walk(working_dir + os.sep + "mod"):
         for file in files:
             filepath = subdir + os.sep + file
             if filepath.endswith(".mod") and filepath.find("cvf") == -1:
-                try:
+                if fail_on_cell_generation:
                     cell0 = Cell(filepath, config_file)
-                except Exception as e:
-                    results.append(e)
-                    continue
+                else:
+                    try:
+                        cell0 = Cell(filepath, config_file)
+                    except Exception as e:
+                        results.append(e)
+                        continue
 
-                results.extend(cell0.run_all_protocols(simulators))
+                results.extend(cell0.run_all_protocols(simulator))
 
-    return results
+    queue.put(results)
 
 
-def compare_test_results(results, rtol=1e-7, atol=0.0, verbose=2):
+def compare(results, main_simulator=Simulators.NEURON, rtol=1e-6, atol=0.0, verbose=2):
     is_error = False
 
     remove_duplicate_log = set()
-    for result_all_sim in results:
+    for simulator, tests in results.items():
+        if simulator == main_simulator:
+            continue
+
+        print("Compare {} with {}".format(main_simulator.name, simulator.name))
 
         # avoid mechanisms that are not supported
-        if isinstance(result_all_sim, Exception):
-            print("CVF - {}, {}".format(colored("FAIL", "red"), str(result_all_sim)))
+        if isinstance(tests, Exception):
+            print("CVF - {}, {}".format(colored("FAIL", "red"), str(tests)))
             is_error = True
             continue
 
-        # check meaningful comparison
-        assert len(result_all_sim) == 2
-
-        nrn_res = result_all_sim[0]
-        corenrn_res = result_all_sim[1]
-
-        # check meaningful comparison
-        assert nrn_res.mechanism == corenrn_res.mechanism
-        assert nrn_res.stimulus == corenrn_res.stimulus
-        assert nrn_res.simulator == Simulators.NEURON
-        assert corenrn_res.simulator == Simulators.CORENEURON
-
-        key = nrn_res.mechanism + nrn_res.stimulus
-        mse = ((nrn_res.trace - corenrn_res.trace) ** 2).mean()
-
-        err = False
-        try:
-            np.testing.assert_allclose(nrn_res.trace, corenrn_res.trace, rtol, atol)
-        except AssertionError as e:
-            err = e
-            is_error = True
-
-        if verbose == 3 or (
-            verbose == 2
-            and (isinstance(err, AssertionError) or key not in remove_duplicate_log)
-        ):
-            print(
-                "CVF - {} - {}, {}, mse={} {}".format(
-                    (colored("SUCCESS", "green"), colored("FAIL", "red"))[
-                        isinstance(err, AssertionError)
-                    ],
-                    nrn_res.mechanism,
-                    nrn_res.stimulus,
-                    mse,
-                    ("", err)[isinstance(err, AssertionError)],
-                )
+        for base_res, test_res in zip(results[main_simulator], tests):
+            key = base_res.mechanism + base_res.stimulus + simulator.name
+            mse = max(
+                [
+                    compute_mse(base_trace, test_res.traces[trace_name])
+                    for trace_name, base_trace in base_res.traces.items()
+                ]
             )
-            remove_duplicate_log.add(key)
+
+            err = False
+
+            try:
+                for trace_name, base_trace in base_res.traces.items():
+                    test_trace = test_res.traces[trace_name]
+                    np.testing.assert_allclose(base_trace, test_trace, rtol, atol)
+            except AssertionError as e:
+                err = e
+                is_error = True
+
+            if verbose == 3 or (
+                verbose == 2
+                and (isinstance(err, AssertionError) or key not in remove_duplicate_log)
+            ):
+                print(
+                    "CVF - {} - {}, {}, mse={} {}".format(
+                        (colored("SUCCESS", "green"), colored("FAIL", "red"))[
+                            isinstance(err, AssertionError)
+                        ],
+                        base_res.mechanism,
+                        test_res.stimulus,
+                        mse,
+                        ("", err)[isinstance(err, AssertionError)],
+                    )
+                )
+                remove_duplicate_log.add(key)
 
     if is_error:
         raise CompareTestResultsError("Some tests failed")
@@ -150,23 +230,39 @@ def compare_test_results(results, rtol=1e-7, atol=0.0, verbose=2):
         print("SUCCESS!")
 
 
-def plot_test_results(results):
+def plot(results):
     remove_duplicate_log = set()
-    colors = {Simulators.NEURON: "r", Simulators.CORENEURON: "b"}
 
-    for result_all_sim in results:
-        for result in result_all_sim:
-            label = "{}, {}, {}".format(
-                result.mechanism, result.stimulus, result.simulator.name
-            )
-            pplt.plot(
-                result.tvec,
-                result.trace,
-                color=colors[result.simulator],
-                label=(label, "")[label in remove_duplicate_log],
-            )
-            remove_duplicate_log.add(label)
+    colit = cycle(dict(colors.BASE_COLORS))
 
-    pplt.xlabel("t (msec)")
-    pplt.legend()
+    fign = 0
+    for (simulator, tests), col in zip(results.items(), dict(colors.BASE_COLORS)):
+        fign += 1
+        col = next(colit)
+        for test in tests:
+            for trace_name, trace_vec in test.traces.items():
+                label = "{}, {}, {}, {}".format(
+                    test.mechanism, test.stimulus, test.simulator.name, trace_name
+                )
+                label = (label, "")[label in remove_duplicate_log]
+
+                pplt.figure(0)
+                pplt.plot(
+                    test.tvec, trace_vec, color=col, label=label,
+                )
+                remove_duplicate_log.add(label)
+
+                pplt.figure(fign)
+                pplt.plot(
+                    test.tvec, trace_vec, color=col, label=label,
+                )
+
+        pplt.figure(0)
+        pplt.xlabel("t (msec)")
+        pplt.legend()
+
+        pplt.figure(fign)
+        pplt.xlabel("t (msec)")
+        pplt.legend()
+
     pplt.show()
