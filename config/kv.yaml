@@ -1,13 +1,15 @@
 channel:
   L: 20.0
   Ra: 150.0
-  current: ik
+  SUFFIX: kv
+  USEION:
+    READ:
+      ek: -88.0
+    WRITE:
+    - ik
   diam: 20.0
   g_pas: 3.334e-05
-  revName: ek
-  revValue: -88.0
   section: soma
-  suffix: kv
   type: outward
   v_init: -80.0
 stimulus:

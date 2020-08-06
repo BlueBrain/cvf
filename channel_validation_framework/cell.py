@@ -16,7 +16,7 @@ RunResult = recordtype(
         "t_steps",
         "v_steps",
         ("tvec", []),
-        ("trace", []),
+        ("traces", {}),
     ],
     default="",
 )
@@ -26,32 +26,22 @@ class Cell:
     def __init__(self, filepath, config_file_path=None):
         self.filepath = filepath
         self.config_file_path = config_file_path
+
+        # Load mod data and set main mechanism
+        self.mod = Mod(self.filepath)
+        # Set data from config file
+        self.conf = Config(self.config_file_path, self.mod)
+
+        self._set_cell()
+
+    def _set_cell(self):
         # Set a few basic things
         self.soma = h.Section(name="soma")
         self.soma.insert("pas")
         self.vc = h.cvf_svclamp(self.soma(0.5))
         self.vc.rs = 0.001
-
-        # Load mod data and set main mechanism
-        self.init_mod()
-
-        # Set data from config file
-        self.init_config()
-
-    def init_mod(self):
-        self.mod = Mod(self.filepath)
-
-        self.mechanism = self.mod.data["NEURON"]["SUFFIX"][0]
-
-        self.soma.insert(self.mechanism)
-
-    def init_config(self):
-
-        self.conf = Config(self.config_file_path, self.mod)
-
-        data = self.conf.data["channel"]
-
-        for att_name, att_value in data.items():
+            # Some keywords in channel could be inserted in h or soma directly
+        for att_name, att_value in self.conf.data["channel"].items():
             try:
                 setattr(self.soma, att_name, att_value)
             except Exception:
@@ -59,11 +49,34 @@ class Cell:
                     setattr(h, att_name, att_value)
                 except Exception:
                     pass
+        # mechanism
+        self.mechanism = self.mod.data["NEURON"]["SUFFIX"][0]
+        self.soma.insert(self.mechanism)
+            # try useion
+        try:
+            for key, value in self.conf.data["channel"]["USEION"]["READ"]:
+                setattr(self.soma, key, value)
+        except:
+            pass
 
-        setattr(self.soma, data["revName"], data["revValue"])
+    @staticmethod
+    def trace_name(name):
+        return "_ref_{}".format(name)
 
-    def trace_name(self):
-        return "_ref_" + self.conf.data["channel"]["current"]
+    def _set_traces(self):
+        traces = {}
+        for name in self.conf.data["channel"]["USEION"]["WRITE"]:
+            new_trace = h.Vector()
+            new_trace.record(getattr(self.soma(0.5), self.trace_name(name)))
+            traces[name] = new_trace
+
+        return traces
+
+    def _get_traces(self, traces):
+        return dict(map(lambda v: (v[0], np.array(v[1]).copy()), traces.items()))
+
+
+
 
     def run_simulator(self, result):
 
@@ -81,14 +94,13 @@ class Cell:
         tvec = h.Vector()
         tvec.record(h._ref_t)
 
-        trace = h.Vector()
-        trace.record(getattr(self.soma(0.5), self.trace_name()))
+        # start recording
+        traces = self._set_traces()
 
         if result.simulator == Simulators.NEURON:
             h.init()
             h.run()
         else:
-
             pc = h.ParallelContext()
             h.stdinit()
 
@@ -97,7 +109,7 @@ class Cell:
             )
 
         result.tvec = np.array(tvec).copy()
-        result.trace = np.array(trace).copy()
+        result.traces = self._get_traces(traces)
 
     def run_protocol(self, stimulus, simulator):
 

@@ -1,13 +1,12 @@
 channel:
   L: 20.0
   Ra: 150.0
-  current: TODO
   diam: 20.0
   g_pas: 3.334e-05
-  revName: TODO
-  revValue: -88.0
+  USEION:
+    READ: -88.0
   section: soma
-  suffix: TODO
+  SUFFIX: REPLACEME
   type: outward
   v_init: -80.0
 stimulus:
@@ -69,3 +68,5 @@ stimulus:
     type: ramp
     vhold: -80.0
     vmax: 70.0
+
+

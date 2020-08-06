@@ -1,7 +1,8 @@
 import logging
-import os
 import subprocess
 import sys
+from itertools import cycle
+from multiprocessing import Process, Queue
 
 import numpy as np
 from termcolor import colored
@@ -37,28 +38,30 @@ def cvf_stdrun():
     config_file = sys.argv[1] if len(sys.argv) > 1 else ""
     additional_mod_folders = sys.argv[3:] if len(sys.argv) > 3 else []
 
-    results = run_tests(
+    results = run(
         config_file=config_file, additional_mod_folders=additional_mod_folders,
     )
 
-    compare_test_results(results)
+    compare(results)
 
     return 0
 
 
-from multiprocessing import Process, Queue
 
 
-def run_tests(
+def run(
     config_file=None,
     additional_mod_folders=[],
     simulators={
         Simulators.NEURON,
         Simulators.CORENEURON_NMODLSYMPY_ANALYTIC,
-        Simulators.CORENEURON_NMODLSYMPY_PADE,
     },
     base_working_dir="tmp",
+    fail_on_cell_generation=False,
 ):
+    if isinstance(additional_mod_folders, str):
+        additional_mod_folders = [additional_mod_folders]
+
     # clear the state
     silent_remove([base_working_dir + "_*"])
 
@@ -70,8 +73,8 @@ def run_tests(
     for simulator in simulators:
         q = Queue()
         p = Process(
-            target=_worker_run_tests,
-            args=(config_file, additional_mod_folders, simulator, base_working_dir, q),
+            target=_worker_run,
+            args=(config_file, additional_mod_folders, simulator, base_working_dir, fail_on_cell_generation, q),
         )
         jobs.append(p)
         p.start()
@@ -83,8 +86,8 @@ def run_tests(
     return results
 
 
-def _worker_run_tests(
-    config_file, additional_mod_folders, simulator, base_working_dir, queue
+def _worker_run(
+    config_file, additional_mod_folders, simulator, base_working_dir, fail_on_cell_generation, queue
 ):
 
     # we want to print the info
@@ -112,7 +115,7 @@ def _worker_run_tests(
         subprocess.run(["nrnivmodl-core", "mod"], cwd=working_dir)
 
     # Import libraries since they are not in the standard
-    from neuron import h, gui
+    from neuron import h
 
     h.nrn_load_dll(
         working_dir + os.sep + "x86_64" + os.sep + ".libs" + os.sep + "libnrnmech.so"
@@ -134,18 +137,21 @@ def _worker_run_tests(
         for file in files:
             filepath = subdir + os.sep + file
             if filepath.endswith(".mod") and filepath.find("cvf") == -1:
-                try:
+                if fail_on_cell_generation:
                     cell0 = Cell(filepath, config_file)
-                except Exception as e:
-                    results.append(e)
-                    continue
+                else:
+                    try:
+                        cell0 = Cell(filepath, config_file)
+                    except Exception as e:
+                        results.append(e)
+                        continue
 
                 results.extend(cell0.run_all_protocols(simulator))
 
     queue.put(results)
 
 
-def compare_test_results(
+def compare(
     results, main_simulator=Simulators.NEURON, rtol=1e-7, atol=0.0, verbose=2
 ):
     is_error = False
@@ -165,11 +171,14 @@ def compare_test_results(
 
         for base_res, test_res in zip(results[main_simulator], tests):
             key = base_res.mechanism + base_res.stimulus + simulator.name
-            mse = ((base_res.trace - test_res.trace) ** 2).mean()
+            mse = max([compute_mse(base_trace, test_res.traces[trace_name]) for trace_name, base_trace in base_res.traces.items()])
 
             err = False
+
             try:
-                np.testing.assert_allclose(base_res.trace, test_res.trace, rtol, atol)
+                for trace_name, base_trace in base_res.traces.items():
+                    test_trace = test_res.traces[trace_name]
+                    np.testing.assert_allclose(base_trace, test_trace, rtol, atol)
             except AssertionError as e:
                 err = e
                 is_error = True
@@ -197,21 +206,25 @@ def compare_test_results(
         print("SUCCESS!")
 
 
-def plot_test_results(results):
+def plot(results):
     remove_duplicate_log = set()
 
-    for (simulator, tests), clr in zip(results.items(), dict(colors.BASE_COLORS)):
+    colit = cycle(dict(colors.BASE_COLORS))
+    for (simulator, tests), col in zip(results.items(), dict(colors.BASE_COLORS)):
+        col = next(colit)
         for test in tests:
-            label = "{}, {}, {}".format(
-                test.mechanism, test.stimulus, test.simulator.name
-            )
-            pplt.plot(
-                test.tvec,
-                test.trace,
-                color=clr,
-                label=(label, "")[label in remove_duplicate_log],
-            )
-            remove_duplicate_log.add(label)
+            for trace_name, trace_vec in test.traces.items():
+                label = "{}, {}, {}, {}".format(
+                    test.mechanism, test.stimulus, test.simulator.name, trace_name
+                )
+
+                pplt.plot(
+                    test.tvec,
+                    trace_vec,
+                    color= col,
+                    label=(label, "")[label in remove_duplicate_log],
+                )
+                remove_duplicate_log.add(label)
 
     pplt.xlabel("t (msec)")
     pplt.legend()

@@ -82,6 +82,8 @@ def smart_merge(map, key, section):
         else:
             smart_merge(map[key], "", section)
 
+def compute_mse(a, b):
+    return ((a - b) ** 2).mean()
 
 def find_first_of_in_file(file, keyword):
     for line in file:
