@@ -80,6 +80,7 @@ def run(
         p.start()
         results[simulator] = q.get()
 
+
     for p in jobs:
         p.join()
 
@@ -210,22 +211,45 @@ def plot(results):
     remove_duplicate_log = set()
 
     colit = cycle(dict(colors.BASE_COLORS))
+
+    fign = 0
     for (simulator, tests), col in zip(results.items(), dict(colors.BASE_COLORS)):
+        fign += 1
         col = next(colit)
         for test in tests:
             for trace_name, trace_vec in test.traces.items():
                 label = "{}, {}, {}, {}".format(
                     test.mechanism, test.stimulus, test.simulator.name, trace_name
                 )
+                label = (label, "")[label in remove_duplicate_log]
 
+                pplt.figure(0)
                 pplt.plot(
                     test.tvec,
                     trace_vec,
                     color= col,
-                    label=(label, "")[label in remove_duplicate_log],
+                    label=label,
                 )
                 remove_duplicate_log.add(label)
 
-    pplt.xlabel("t (msec)")
-    pplt.legend()
+                pplt.figure(fign)
+                pplt.plot(
+                    test.tvec,
+                    trace_vec,
+                    color= col,
+                    label=label,
+                )
+
+        pplt.figure(0)
+        pplt.xlabel("t (msec)")
+        pplt.legend()
+
+        pplt.figure(fign)
+        pplt.xlabel("t (msec)")
+        pplt.legend()
+
     pplt.show()
+
+
+
+

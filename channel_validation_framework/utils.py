@@ -1,6 +1,6 @@
 import os
 import shutil
-from enum import Enum, auto
+from enum import IntEnum, auto
 
 import numpy as np
 
@@ -10,7 +10,7 @@ import glob
 # do not import from neuron
 
 
-class Simulators(Enum):
+class Simulators(IntEnum):
     NEURON = auto()
     CORENEURON_NMODLSYMPY_ANALYTIC = auto()
     CORENEURON_NMODLSYMPY_PADE = auto()

@@ -5,7 +5,7 @@ Module to parse Mod files to auto-generate Config
 import yaml
 
 from .utils import smart_merge
-
+import os
 
 class ModParserError(Exception):
     pass
@@ -21,6 +21,7 @@ class Mod:
         "POINT_PROCESS",
         "READ",
         "WRITE",
+        "VALENCE",
         "NONSPECIFIC_CURRENT",
     }
 
@@ -33,18 +34,25 @@ class Mod:
 
         with open(self.filepath, "r") as file_iter:
             for line in file_iter:
+                line = self._purify_line(line)
+                if not line:
+                    continue
+
                 if line.startswith("NEURON"):
                     smart_merge(self.data, "NEURON", self._parse_section(file_iter))
 
                     break
+
+    def _purify_line(self, line):
+        return line.split(":", 1)[0].replace(",", " ").strip()
 
     def _parse_section(self, file_iter):
 
         info = {}
 
         for line in file_iter:
-            line = line.split(":", 1)[0].replace(",", " ").strip()
-            if len(line) == 0 or line.startswith(":"):
+            line = self._purify_line(line)
+            if not line:
                 continue
 
             if line.startswith("}"):
@@ -69,6 +77,29 @@ class Mod:
             if ii in self.supported_keywords:
                 key = ii
             else:
-                smart_merge(info, key, [ii])
+                try:
+                    smart_merge(info, key, [float(ii)])
+                except ValueError:
+                    smart_merge(info, key, [ii])
 
         return info
+
+
+def mod_crawler(modfolders, ff):
+    if isinstance(modfolders, str):
+        modfolders = [modfolders]
+    for folder in modfolders:
+        for subdir, dirs, files in os.walk(folder):
+            for file in files:
+                filepath = subdir + os.sep + file
+                if file.endswith(".mod"):
+                    try:
+                        m = Mod(filepath)
+                    except Exception as e:
+                        print(filepath)
+                        print(e)
+                        continue
+
+                    if ff(m):
+                        print(filepath)
+                        print(m)

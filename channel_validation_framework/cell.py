@@ -42,6 +42,7 @@ class Cell:
         self.vc.rs = 0.001
             # Some keywords in channel could be inserted in h or soma directly
         for att_name, att_value in self.conf.data["channel"].items():
+
             try:
                 setattr(self.soma, att_name, att_value)
             except Exception:
@@ -65,15 +66,25 @@ class Cell:
 
     def _set_traces(self):
         traces = {}
-        for name in self.conf.data["channel"]["USEION"]["WRITE"]:
-            new_trace = h.Vector()
-            new_trace.record(getattr(self.soma(0.5), self.trace_name(name)))
-            traces[name] = new_trace
+        try:
+            for name in self.conf.data["channel"]["USEION"]["WRITE"]:
+                new_trace = h.Vector()
+                new_trace.record(getattr(self.soma(0.5), self.trace_name(name)))
+                traces[name] = new_trace
+        except KeyError:
+            pass
+
+        i_mem = h.Vector()
+        i_mem.record(self.soma(0.5)._ref_i_membrane_)
+        traces["i_membrane_"] = i_mem
 
         return traces
 
     def _get_traces(self, traces):
-        return dict(map(lambda v: (v[0], np.array(v[1]).copy()), traces.items()))
+        out = {}
+        for key, val in traces.items():
+            out[key] = np.array(val).copy()
+        return out
 
 
 
@@ -138,3 +149,5 @@ class Cell:
             results += self.run_protocol(protocol_name, simulator)
 
         return results
+
+
