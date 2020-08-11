@@ -37,7 +37,7 @@ setup(
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
     extras_require=dict(plotting=["matplotlib"], full=["matplotlib"],),
-    install_requires=["recordtype", "termcolor", "pyyaml", "numpy"],
+    install_requires=["recordtype", "termcolor", "pyyaml", "numpy", "pyyaml"],
     entry_points=dict(
         console_scripts=[
             "cvf_stdrun=channel_validation_framework.commands:cvf_stdrun",

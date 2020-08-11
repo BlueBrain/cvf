@@ -1,0 +1,28 @@
+global:
+  data:
+    v_init: -30.0
+
+sections:
+  data:
+    L: 20.0
+    Ra: 150.0
+    diam: 20.0
+    g_pas: 3.334e-05
+mechanisms:
+  data:
+    (1): 1.0
+    (mV): -88
+    (mA/cm2): 13
+    (mM): 0.00001
+  rng:
+    - 3
+    - 7
+    - 19
+
+netcons:
+  data:
+    weight: 1.3
+    threshold: 11
+    delay: 53
+
+

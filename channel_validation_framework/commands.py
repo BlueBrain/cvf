@@ -1,16 +1,22 @@
+import glob
 import logging
 import os
 import subprocess
 import sys
+from itertools import cycle
+from pathlib import Path
 
 import numpy as np
-from termcolor import colored
+import yaml
 
-from .config_parser import Config
-from .utils import Simulators, silent_remove, copy_to_working_dir
+from . import utils
+from .config import Config
+from .run_result import RunResult, Result
+from .simulation import Simulation
 
 try:
     import matplotlib.pyplot as pplt
+    from matplotlib import colors
 except ImportError:
     logging.warning("Matplotlib could no be found. Proceeding without plots...")
 
@@ -22,151 +28,265 @@ class CompareTestResultsError(Exception):
     pass
 
 
-def cvf_in2yaml(config_folder="config"):
-    for subdir, dirs, files in os.walk(config_folder):
-        for file in files:
-            filepath = subdir + os.sep + file
-            if file.endswith(".in"):
-                config = Config(filepath)
-                config.dump_to_yaml()
-
-
 def cvf_stdrun():
 
-    config_file = sys.argv[1] if len(sys.argv) > 1 else ""
+    configpath = sys.argv[1] if len(sys.argv) > 1 else "config"
+    modignorepath = sys.argv[2] if len(sys.argv) > 2 else "modignore.yaml"
     additional_mod_folders = sys.argv[3:] if len(sys.argv) > 3 else []
 
-    results = run_tests(
-        config_file=config_file, additional_mod_folders=additional_mod_folders,
+    results = run(
+        configpath=configpath,
+        additional_mod_folders=additional_mod_folders,
+        modignorepath=modignorepath,
     )
 
-    compare_test_results(results)
+    compare(results)
 
     return 0
 
 
-def run_tests(
-    config_file=None,
+def run(
+    configpath="config",
+    config_protocol_generator=Config.ProtocolGenerator.SI_FIRST_PROTOCOL,
     additional_mod_folders=[],
-    simulators=[Simulators.NEURON, Simulators.CORENEURON],
-    working_dir="mod/tmp",
+    modignorepath="modignore.yaml",
+    simulators={
+        utils.Simulators.NEURON,
+        utils.Simulators.CORENEURON_NMODLSYMPY_ANALYTIC,
+    },
+    base_working_dir="tmp",
+    print_config=False,
 ):
-    # we want to print the info
     logging.getLogger().setLevel(logging.INFO)
 
-    # clean the state
-    silent_remove(["enginemech.o", "nrnivmech_install.sh", "x86_64", working_dir])
-    os.mkdir(working_dir)
+    # clear the state
+    utils.silent_remove([base_working_dir + "_*"])
 
-    # we add the custom cvf mod files
-    additional_mod_folders.append("mod/cvf")
-    additional_mod_folders.append("mod/local")
-    copy_to_working_dir_log = copy_to_working_dir(
-        additional_mod_folders, working_dir, ".mod"
-    )
-    logging.info(
-        "The following files were copied in '%s': \n%s",
-        working_dir,
-        "".join(copy_to_working_dir_log),
-    )
+    configpath = os.path.abspath(configpath)
 
-    # call the compilers
-    subprocess.call(["nrnivmodl", working_dir])
-    subprocess.call(["nrnivmodl-core", working_dir])
+    modignore = {}
+    if modignorepath:
+        modignorepath = os.path.abspath(modignorepath)
+        with open(modignorepath, "r") as file:
+            modignore = yaml.load(file, Loader=yaml.FullLoader)
 
-    # Import neuron after nrnivmodl* so that libraries are not loaded twice/not loaded
-    from .cell import Cell
+    out = {}
+    for simulator in simulators:
 
+        # prepare working dir
+        working_dir = "{}_{}".format(base_working_dir, simulator.name)
+        copy_to_working_dir_log = utils.init_working_dir(
+            additional_mod_folders, working_dir, modignore
+        )
+
+        subprocess.run(["nrnivmodl", "mod"], cwd=working_dir)
+        if simulator is not utils.Simulators.NEURON:
+            # TODO: add support for compiling with different sympy options
+            subprocess.run(["nrnivmodl-core", "mod"], cwd=working_dir)
+
+        out[simulator] = _simulator_run(
+            simulator,
+            configpath,
+            config_protocol_generator,
+            modignore,
+            working_dir,
+            print_config,
+        )
+
+        out[simulator].extend(
+                RunResult(
+                    result=Result.SKIP,
+                    modfile=Path(name).stem,
+                    result_msg=modignore[Path(name).stem],
+                )
+                for name, is_copied in copy_to_working_dir_log.items()
+                if not is_copied
+        )
+
+    return out
+
+
+def _simulator_run(
+    simulator,
+    configpath,
+    config_protocol_generator,
+    modignore,
+    working_dir,
+    print_config,
+):
     results = []
-    for subdir, dirs, files in os.walk(working_dir):
-        for file in files:
-            filepath = subdir + os.sep + file
-            if filepath.endswith(".mod") and filepath.find("cvf") == -1:
-                try:
-                    cell0 = Cell(filepath, config_file)
-                except Exception as e:
-                    results.append(e)
-                    continue
-
-                results.extend(cell0.run_all_protocols(simulators))
-
+    modpaths = glob.glob(os.path.join(working_dir, "mod", "*.mod"))
+    for modpath in modpaths:
+        name = Path(modpath).stem
+        if name not in modignore:
+            config = Config(
+                configpath, modpath, config_protocol_generator, print_config
+            )
+            sim = Simulation(working_dir, config,)
+            results.extend(sim.run_all_protocols(simulator))
+        else:
+            results.append(
+                RunResult(result=Result.SKIP, modfile=name, result_msg=modignore[name],)
+            )
     return results
 
 
-def compare_test_results(results, rtol=1e-7, atol=0.0, verbose=2):
+def compare(
+    results,
+    main_simulator=utils.Simulators.NEURON,
+    rtol=1e-5,
+    atol=1e-8,
+    verbose=2,
+    is_fail_on_error=True,
+):
+    logging.getLogger().setLevel(logging.INFO)
     is_error = False
 
     remove_duplicate_log = set()
-    for result_all_sim in results:
-
-        # avoid mechanisms that are not supported
-        if isinstance(result_all_sim, Exception):
-            print("CVF - {}, {}".format(colored("FAIL", "red"), str(result_all_sim)))
-            is_error = True
+    for simulator, tests in sorted(results.items()):
+        if simulator == main_simulator:
             continue
 
-        # check meaningful comparison
-        assert len(result_all_sim) == 2
+        logging.info("Compare {} with {}".format(main_simulator.name, simulator.name))
 
-        nrn_res = result_all_sim[0]
-        corenrn_res = result_all_sim[1]
+        for base_res, test_res in zip(results[main_simulator], tests):
 
-        # check meaningful comparison
-        assert nrn_res.mechanism == corenrn_res.mechanism
-        assert nrn_res.stimulus == corenrn_res.stimulus
-        assert nrn_res.simulator == Simulators.NEURON
-        assert corenrn_res.simulator == Simulators.CORENEURON
+            if test_res.result is Result.SUCCESS:
+                key = base_res.modfile + base_res.protocol + simulator.name
+                test_res.mse = [
+                    utils.compute_mse(base_trace, test_res.traces[trace_name])
+                    for trace_name, base_trace in base_res.traces.items()
+                ]
 
-        key = nrn_res.mechanism + nrn_res.stimulus
-        mse = ((nrn_res.trace - corenrn_res.trace) ** 2).mean()
+                try:
+                    for trace_name, base_trace in base_res.traces.items():
+                        test_trace = test_res.traces[trace_name]
+                        np.testing.assert_allclose(base_trace, test_trace, rtol, atol)
+                except AssertionError as e:
+                    test_res.result = Result.FAIL
+                    test_res.result_msg = str(e)
+                    is_error = True
 
-        err = False
-        try:
-            np.testing.assert_allclose(nrn_res.trace, corenrn_res.trace, rtol, atol)
-        except AssertionError as e:
-            err = e
-            is_error = True
-
-        if verbose == 3 or (
-            verbose == 2
-            and (isinstance(err, AssertionError) or key not in remove_duplicate_log)
-        ):
-            print(
-                "CVF - {} - {}, {}, mse={} {}".format(
-                    (colored("SUCCESS", "green"), colored("FAIL", "red"))[
-                        isinstance(err, AssertionError)
-                    ],
-                    nrn_res.mechanism,
-                    nrn_res.stimulus,
-                    mse,
-                    ("", err)[isinstance(err, AssertionError)],
+            if verbose == 3 or (
+                verbose == 2
+                and (
+                    test_res.result is not Result.SUCCESS
+                    or key not in remove_duplicate_log
                 )
-            )
-            remove_duplicate_log.add(key)
+            ):
+                print(test_res)
 
-    if is_error:
+            if test_res.result is Result.SUCCESS:
+                remove_duplicate_log.add(key)
+
+    if is_error and is_fail_on_error:
         raise CompareTestResultsError("Some tests failed")
     elif verbose == 1:
-        print("SUCCESS!")
+        logging.info("SUCCESS!")
 
 
-def plot_test_results(results):
-    remove_duplicate_log = set()
-    colors = {Simulators.NEURON: "r", Simulators.CORENEURON: "b"}
+def plot(results):
+    logging.getLogger().setLevel(logging.INFO)
 
-    for result_all_sim in results:
-        for result in result_all_sim:
-            label = "{}, {}, {}".format(
-                result.mechanism, result.stimulus, result.simulator.name
+    def plot_switcher(ifig, t, v, col, label, is_spiketrain, is_log=False):
+        if len(v) == 0:
+            return
+
+        pplt.figure(ifig)
+        if is_spiketrain:
+            pplt.stem(
+                v, [1] * len(v), linefmt=col, label=label, use_line_collection=True
             )
+        elif is_log:
             pplt.plot(
-                result.tvec,
-                result.trace,
-                color=colors[result.simulator],
-                label=(label, "")[label in remove_duplicate_log],
+                t, np.log10(abs(v)), color=col, label=label,
             )
-            remove_duplicate_log.add(label)
+        else:
+            pplt.plot(
+                t, v, color=col, label=label,
+            )
 
-    pplt.xlabel("t (msec)")
-    pplt.legend()
+    remove_duplicate_log = set()
+
+    colit = cycle(dict(colors.BASE_COLORS))
+
+    i_fig = 1
+    for (simulator, tests), col in zip(
+        sorted(results.items()), dict(colors.BASE_COLORS)
+    ):
+        if len(results) > 1:
+            col = next(colit)
+        for test in tests:
+            if test.result is not Result.SUCCESS:
+                continue
+
+            for trace_name, trace_vec in test.traces.items():
+
+                if len(results) == 1:
+                    col = next(colit)
+
+                is_spiketrain = "netcon" in trace_name
+
+                label = "{}, {}, {}, {}".format(
+                    test.modfile, test.protocol, test.simulator.name, trace_name
+                )
+
+                no_double_label = (label, "")[label in remove_duplicate_log]
+                remove_duplicate_log.add(label)
+
+                plot_switcher(
+                    0, test.tvec, trace_vec, col, no_double_label, is_spiketrain
+                )
+
+                plot_switcher(
+                    1,
+                    test.tvec,
+                    trace_vec,
+                    col,
+                    no_double_label,
+                    is_spiketrain,
+                    is_log=True,
+                )
+
+                i_fig += 1
+                if i_fig > 20:
+                    logging.error("Too many figures! I strike!")
+                    return
+
+                plot_switcher(i_fig, test.tvec, trace_vec, col, label, is_spiketrain)
+
+        pplt.figure(0)
+        pplt.title("cumulative")
+        pplt.figure(1)
+        pplt.title("cumulative")
+        pplt.ylabel("log10(|y|)")
+
+        for i in range(0, i_fig + 1):
+            pplt.figure(i)
+
+            pplt.xlabel("t (msec)")
+            pplt.legend()
+
     pplt.show()
+
+
+def get_conf(
+    configpath="config",
+    additional_mod_folders=[],
+    working_dir="tmp",
+    protocol_generator=Config.ProtocolGenerator.SI_FIRST_PROTOCOL,
+):
+
+    utils.init_working_dir(additional_mod_folders, working_dir)
+    modpaths = glob.glob(os.path.join(working_dir, "mod", "*.mod"))
+
+    conf = []
+    for modpath in modpaths:
+        if modpath.find("cvf") == -1:
+            conf.append(Config(configpath, modpath, protocol_generator))
+
+    return conf
+
+
+def cvf_print(results):
+    print(yaml.dump(utils.yamlfy(results)))

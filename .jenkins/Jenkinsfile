@@ -33,6 +33,12 @@ pipeline {
             }
         }
 
+        stage('Get mod files'){
+            steps {
+                sh 'source $JENKINS_DIR/get_mod_files.sh'
+            }
+        }
+
         stage('Run Tests'){
             steps{
                 sh 'source $JENKINS_DIR/run_tests.sh'

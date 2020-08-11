@@ -1,0 +1,42 @@
+wiggle:
+  global: &id001
+    data:
+      v_init: -30.0
+  sections:
+    soma:
+      data: &id002
+        L: 20.0
+        Ra: 150.0
+        diam: 20.0
+        g_pas: 3.334e-05
+      inputs:
+        v:
+          t_steps: &id003
+          - 100.0
+          - 800.0
+          - 400.0
+          - 400.0
+          - 400.0
+          - 200.0
+          - 400.0
+          - 100.0
+          - 100.0
+          y_steps:
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+      mechanisms: &id004
+        Nap_Et2:
+          data:
+            ena: -88
+            ttxi: 1.0e-05
+            ttxo: 1.0e-05
+          type: SUFFIX
+      record_traces: &id005
+      - ina

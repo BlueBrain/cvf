@@ -1,0 +1,88 @@
+wiggle:
+  global: &id001
+    data:
+      v_init: -80.0
+  sections:
+    soma:
+      data: &id002
+        L: 20.0
+        Ra: 150.0
+        diam: 20.0
+        g_pas: 3.334e-05
+      inputs: &id003
+        v:
+          t_steps:
+          - 100.0
+          - 800.0
+          - 400.0
+          - 400.0
+          - 400.0
+          - 200.0
+          - 400.0
+          - 100.0
+          - 100.0
+          y_steps:
+          - -80.0
+          - 80.0
+          - -80.0
+          - 80.0
+          - -40.0
+          - 60.0
+          - -80.0
+          - 80.0
+          - -20.0
+      mechanisms:
+        nax:
+          data:
+            ena: -88
+            ttxi: 1.0e-05
+            ttxo: 1.0e-05
+          type: SUFFIX
+      record_traces: &id004
+      - ina
+wiggle_1:
+  global: *id001
+  sections:
+    soma:
+      data: *id002
+      inputs: *id003
+      mechanisms:
+        nax:
+          data:
+            ena: -88
+            ttxi: 0.015625
+            ttxo: 1.0e-05
+          type: SUFFIX
+      record_traces: *id004
+wiggle_2:
+  global: *id001
+  sections:
+    soma:
+      data: *id002
+      inputs: *id003
+      mechanisms:
+        nax:
+          data:
+            ena: -88
+            ttxi: 0.015625
+            ttxo: 0.0
+          type: SUFFIX
+      record_traces: *id004
+wiggle_3:
+  global: *id001
+  sections:
+    soma:
+      data: *id002
+      inputs: *id003
+      mechanisms:
+        nax:
+          data:
+            ena: -88
+            ttxi: 0.0
+            ttxo: 0.0
+          type: SUFFIX
+      record_traces: *id004
+
+
+
+

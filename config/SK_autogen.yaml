@@ -1,0 +1,61 @@
+wiggle:
+  global: &id001
+    data:
+      v_init: -30.0
+  sections:
+    soma:
+      data: &id002
+        L: 20.0
+        Ra: 150.0
+        diam: 20.0
+        g_pas: 3.334e-05
+      inputs:
+        v:
+          t_steps: &id003
+          - 100.0
+          - 800.0
+          - 400.0
+          - 400.0
+          - 400.0
+          - 200.0
+          - 400.0
+          - 100.0
+          - 100.0
+          y_steps:
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+      mechanisms: &id004
+        SK:
+          data:
+            cai: 1.0e-05
+            ek: -88
+          type: SUFFIX
+      record_traces: &id005
+      - ik
+wiggle_1:
+  global: *id001
+  sections:
+    soma:
+      data: *id002
+      inputs:
+        cai:
+          t_steps: *id003
+          y_steps:
+          - -0.0
+          - 0.0002
+          - -0.0
+          - 0.0002
+          - -0.0
+          - 0.0002
+          - -0.0
+          - 0.0002
+          - -0.0
+      mechanisms: *id004
+      record_traces: *id005

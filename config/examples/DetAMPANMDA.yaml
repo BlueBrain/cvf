@@ -1,0 +1,49 @@
+wiggle:
+  global:
+    data:
+      v_init: -30.0
+  netcons:
+    nc:
+      data:
+        delay: 53
+        threshold: 11
+        weight: 1.3
+      source:
+        pre: v
+      target: post
+  sections:
+    post:
+      data: &id001
+        L: 20.0
+        Ra: 150.0
+        diam: 20.0
+        g_pas: 3.334e-05
+      mechanisms:
+        DetAMPANMDA:
+          type: POINT_PROCESS
+      record_traces:
+      - i
+    pre:
+      data: *id001
+      inputs:
+        v:
+          t_steps:
+          - 100.0
+          - 800.0
+          - 400.0
+          - 400.0
+          - 400.0
+          - 200.0
+          - 400.0
+          - 100.0
+          - 100.0
+          y_steps:
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0

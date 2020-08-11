@@ -1,0 +1,42 @@
+wiggle:
+  global:
+    data:
+      v_init: -80.0
+  sections:
+    soma:
+      data:
+        L: 20.0
+        Ra: 150.0
+        diam: 20.0
+        g_pas: 3.334e-05
+      mechanisms:
+        kd:
+          data:
+            ek: -88
+            gkdbar_kd: 3.1e-05
+          type: SUFFIX
+      record_traces:
+      - ik
+      inputs:
+        v:
+          t_steps:
+          - 100.0
+          - 800.0
+          - 400.0
+          - 400.0
+          - 400.0
+          - 200.0
+          - 400.0
+          - 100.0
+          - 100.0
+          y_steps:
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+
