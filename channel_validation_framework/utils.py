@@ -1,6 +1,7 @@
+import glob
 import os
 import shutil
-from enum import Enum, auto
+from enum import IntEnum, auto
 
 import numpy as np
 
@@ -8,21 +9,26 @@ import numpy as np
 # do not import from neuron
 
 
-class Simulators(Enum):
+class Simulators(IntEnum):
     NEURON = auto()
-    CORENEURON = auto()
+    CORENEURON_NMODLSYMPY_ANALYTIC = auto()
+    CORENEURON_NMODLSYMPY_PADE = auto()
+    CORENEURON_NMODLSYMPY_CSE = auto()
+    CORENEURON_NMODLSYMPY_CONDUCTANCEC = auto()
 
 
-def silent_remove(filenames):
-    for filename in filenames:
-        if os.path.exists(filename):
-            try:
-                if os.path.isfile(filename):
-                    os.remove(filename)
-                else:
-                    shutil.rmtree(filename)
-            except OSError:
-                pass
+def silent_remove(dirs):
+    for dir in dirs:
+        filenames = glob.glob(dir)
+        for filename in filenames:
+            if os.path.exists(filename):
+                try:
+                    if os.path.isfile(filename):
+                        os.remove(filename)
+                    else:
+                        shutil.rmtree(filename)
+                except OSError:
+                    pass
 
 
 def get_step_wave_form(t, v, dt):
@@ -30,9 +36,19 @@ def get_step_wave_form(t, v, dt):
     for t, v in zip(t, v):
         vvec.extend([v] * int(t / dt))
 
-    tvec = np.linspace(dt, len(vvec) * dt, len(vvec))
+    tvec = np.linspace(0, (len(vvec) - 1) * dt, len(vvec))
 
     return tvec, vvec
+
+
+# dic[key] = {key_list[0]:dic[key], key_list[1]:dic[key], ... , key_list[n]:dic[key]}
+# or
+# del dic[key]
+def fill_or_delete_dictkey(dic, key, key_list):
+    if not key_list:
+        del dic[key]
+    else:
+        dic[key] = dict(zip(key_list, [dic[key]] * len(key_list)))
 
 
 def get_V_steps(v):
@@ -74,6 +90,10 @@ def smart_merge(map, key, section):
                 smart_merge(map[key], k, v)
         else:
             smart_merge(map[key], "", section)
+
+
+def compute_mse(a, b):
+    return ((a - b) ** 2).mean()
 
 
 def find_first_of_in_file(file, keyword):

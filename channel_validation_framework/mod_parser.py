@@ -21,6 +21,7 @@ class Mod:
         "POINT_PROCESS",
         "READ",
         "WRITE",
+        "VALENCE",
         "NONSPECIFIC_CURRENT",
     }
 
@@ -33,18 +34,25 @@ class Mod:
 
         with open(self.filepath, "r") as file_iter:
             for line in file_iter:
+                line = self._purify_line(line)
+                if not line:
+                    continue
+
                 if line.startswith("NEURON"):
                     smart_merge(self.data, "NEURON", self._parse_section(file_iter))
 
                     break
+
+    def _purify_line(self, line):
+        return line.split(":", 1)[0].replace(",", " ").strip()
 
     def _parse_section(self, file_iter):
 
         info = {}
 
         for line in file_iter:
-            line = line.split(":", 1)[0].replace(",", " ").strip()
-            if len(line) == 0 or line.startswith(":"):
+            line = self._purify_line(line)
+            if not line:
                 continue
 
             if line.startswith("}"):
@@ -69,6 +77,9 @@ class Mod:
             if ii in self.supported_keywords:
                 key = ii
             else:
-                smart_merge(info, key, [ii])
+                try:
+                    smart_merge(info, key, [float(ii)])
+                except ValueError:
+                    smart_merge(info, key, [ii])
 
         return info

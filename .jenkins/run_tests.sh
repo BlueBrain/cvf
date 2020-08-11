@@ -7,7 +7,7 @@ module load unstable
 
 module load neuron/develop coreneuron/develop nmodl/develop
 module av
-module load python/3.7.4
+module load python-dev
 
 python3.7 -mvenv $BUILD_HOME/venv
 source $BUILD_HOME/venv/bin/activate

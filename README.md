@@ -46,14 +46,31 @@ neuron/develop
 coreneuron/develop
 ```
 
-## Run
+## Running installing the python module
 
-After everything is installed, you can just:
-
-```bash
-./run_tests.sh
+```Python
+python setup.py install
 ```
 
-The program will compile with nmodl and mod2c and run all the tests presenting a result summary at the end.
+Now you can call svc_stdrun from command line:
+
+```Bash
+svc_stdrun
+```
+
+... or use the commands from the module in python. For example, for the standard run:
+
+```python
+from channel_validation_framework.commands import *
+cvf_stdrun()
+```
+
+## Running without installing
+
+You can directly call the module commands from bash:
+
+```bash
+python -c "from channel_validation_framework.commands import *; cvf_stdrun()"
+```
 
 
