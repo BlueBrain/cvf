@@ -1,14 +1,14 @@
 import logging
 import subprocess
 import sys
-from itertools import cycle, tee
-from multiprocessing import Process, Queue
+from itertools import cycle
 
-import numpy as np
+import yaml
 from termcolor import colored
 
 from .config_parser import Config
 from .mod_parser import Mod
+from .simulation import Simulation
 from .utils import *
 
 try:
@@ -53,8 +53,8 @@ def run(
     additional_mod_folders=[],
     simulators={Simulators.NEURON, Simulators.CORENEURON_NMODLSYMPY_ANALYTIC,},
     base_working_dir="tmp",
-    fail_on_cell_generation=True,
 ):
+    logging.getLogger().setLevel(logging.INFO)
 
     # clear the state
     silent_remove([base_working_dir + "_*"])
@@ -62,106 +62,30 @@ def run(
     if config_file:
         config_file = os.path.abspath(config_file)
 
-    results = {}
-    jobs = []
+    out = {}
     for simulator in simulators:
-        q = Queue()
-        p = Process(
-            target=_worker_run,
-            args=(
-                config_file,
-                additional_mod_folders,
-                simulator,
-                base_working_dir,
-                fail_on_cell_generation,
-                q,
-            ),
-        )
-        jobs.append(p)
-        p.start()
-        results[simulator] = q.get()
 
-    for p in jobs:
-        p.join()
+        working_dir = "{}_{}".format(base_working_dir, simulator.name)
+        _init_working_dir(additional_mod_folders, working_dir)
+        subprocess.run(["nrnivmodl", "mod"], cwd=working_dir)
+        if simulator is not Simulators.NEURON:
+            # TODO: add support for compiling with different sympy options
+            subprocess.run(["nrnivmodl-core", "mod"], cwd=working_dir)
 
-    return results
+        results = []
+        for subdir, dirs, files in os.walk(working_dir + os.sep + "mod"):
+            for file in files:
+                filepath = subdir + os.sep + file
+                if filepath.endswith(".mod") and filepath.find("cvf") == -1:
+                    sim = Simulation(working_dir, filepath, config_file)
+                    results.extend(sim.run(simulator))
+        out[simulator] = results
 
-
-def _worker_run(
-    config_file,
-    additional_mod_folders,
-    simulator,
-    base_working_dir,
-    fail_on_cell_generation,
-    queue,
-):
-
-    # we want to print the info
-    logging.getLogger().setLevel(logging.INFO)
-    # commond working dir used to manually modify and check .cpp files
-    # working_dir = "{}_{}".format(base_working_dir, simulator.name)
-    working_dir = "{}_{}_{}".format(base_working_dir, simulator.name, str(os.getpid()))
-
-    _init_working_dir(additional_mod_folders, working_dir)
-
-    # call the compilers
-    subprocess.run(["nrnivmodl", "mod"], cwd=working_dir)
-    if simulator is not Simulators.NEURON:
-        # TODO: add support for compiling with different sympy options
-        subprocess.run(["nrnivmodl-core", "mod"], cwd=working_dir)
-
-    # Import libraries since they are not in the standard
-    from neuron import h
-
-    h.nrn_load_dll(
-        os.path.abspath(
-            glob.glob(
-                working_dir
-                + os.sep
-                + "x86_64"
-                + os.sep
-                + ".libs"
-                + os.sep
-                + "libnrnmech.*"
-            )[0]
-        )
-    )
-
-    if simulator is not Simulators.NEURON:
-        os.environ["CORENEURONLIB"] = os.path.abspath(
-            glob.glob(
-                working_dir
-                + os.sep
-                + "x86_64"
-                + os.sep
-                + ".libs"
-                + os.sep
-                + "libcorenrnmech.*"
-            )[0]
-        )
-
-    from .cell import Cell
-
-    results = []
-    for subdir, dirs, files in os.walk(working_dir + os.sep + "mod"):
-        for file in files:
-            filepath = subdir + os.sep + file
-            if filepath.endswith(".mod") and filepath.find("cvf") == -1:
-                if fail_on_cell_generation:
-                    cell0 = Cell(filepath, config_file)
-                else:
-                    try:
-                        cell0 = Cell(filepath, config_file)
-                    except Exception as e:
-                        results.append(e)
-                        continue
-
-                results.extend(cell0.run_all_protocols(simulator))
-
-    queue.put(results)
+    return out
 
 
 def compare(results, main_simulator=Simulators.NEURON, rtol=1e-6, atol=0.0, verbose=2):
+    logging.getLogger().setLevel(logging.INFO)
     is_error = False
 
     remove_duplicate_log = set()
@@ -179,12 +103,10 @@ def compare(results, main_simulator=Simulators.NEURON, rtol=1e-6, atol=0.0, verb
 
         for base_res, test_res in zip(results[main_simulator], tests):
             key = base_res.mechanism + base_res.stimulus + simulator.name
-            mse = max(
-                [
-                    compute_mse(base_trace, test_res.traces[trace_name])
-                    for trace_name, base_trace in base_res.traces.items()
-                ]
-            )
+            mse = [
+                compute_mse(base_trace, test_res.traces[trace_name])
+                for trace_name, base_trace in base_res.traces.items()
+            ]
 
             err = False
 
@@ -207,11 +129,20 @@ def compare(results, main_simulator=Simulators.NEURON, rtol=1e-6, atol=0.0, verb
                         ],
                         base_res.mechanism,
                         test_res.stimulus,
-                        mse,
+                        max(mse),
                         ("", err)[isinstance(err, AssertionError)],
                     )
                 )
-                print("              - Traces: " + ", ".join(base_res.traces))
+
+                print(
+                    "              - Traces: "
+                    + ", ".join(
+                        [
+                            ": ".join(map(float2short_str, i,))
+                            for i in zip(base_res.traces, mse)
+                        ]
+                    )
+                )
 
                 remove_duplicate_log.add(key)
 
@@ -222,43 +153,79 @@ def compare(results, main_simulator=Simulators.NEURON, rtol=1e-6, atol=0.0, verb
 
 
 def plot(results):
+    logging.getLogger().setLevel(logging.INFO)
+
+    def plot_switcher(ifig, t, v, col, label, is_spiketrain, is_log=False):
+        if len(v) == 0:
+            return
+
+        pplt.figure(ifig)
+        if is_spiketrain:
+            pplt.stem(
+                v, [1] * len(v), linefmt=col, label=label, use_line_collection=True
+            )
+        elif is_log:
+            pplt.plot(
+                t, np.log10(abs(v)), color=col, label=label,
+            )
+        else:
+            pplt.plot(
+                t, v, color=col, label=label,
+            )
+
     remove_duplicate_log = set()
 
     colit = cycle(dict(colors.BASE_COLORS))
 
     i_fig = 1
     for (simulator, tests), col in zip(results.items(), dict(colors.BASE_COLORS)):
-        col = next(colit)
+        if len(results) > 1:
+            col = next(colit)
         for test in tests:
-
             for trace_name, trace_vec in test.traces.items():
+
+                if len(results) == 1:
+                    col = next(colit)
+
+                is_spiketrain = "netcon" in trace_name
+
                 label = "{}, {}, {}, {}".format(
                     test.mechanism, test.stimulus, test.simulator.name, trace_name
                 )
+
                 no_double_label = (label, "")[label in remove_duplicate_log]
                 remove_duplicate_log.add(label)
 
-                pplt.figure(0)
-                pplt.plot(
-                    test.tvec, trace_vec, color=col, label=no_double_label,
+                plot_switcher(
+                    0, test.tvec, trace_vec, col, no_double_label, is_spiketrain
                 )
 
-                pplt.figure(1)
-                pplt.plot(
+                plot_switcher(
+                    1,
                     test.tvec,
-                    np.log10(abs(trace_vec)),
-                    color=col,
-                    label=no_double_label,
+                    trace_vec,
+                    col,
+                    no_double_label,
+                    is_spiketrain,
+                    is_log=True,
                 )
 
                 i_fig += 1
-                pplt.figure(i_fig)
-                pplt.plot(
-                    test.tvec, trace_vec, color=col, label=label,
-                )
+                if i_fig > 20:
+                    logging.error("Too many figures! I strike!")
+                    return
+
+                plot_switcher(i_fig, test.tvec, trace_vec, col, label, is_spiketrain)
+
+        pplt.figure(0)
+        pplt.title("cumulative")
+        pplt.figure(1)
+        pplt.title("cumulative")
+        pplt.ylabel("log10(|y|)")
 
         for i in range(0, i_fig + 1):
             pplt.figure(i)
+
             pplt.xlabel("t (msec)")
             pplt.legend()
 
@@ -319,8 +286,12 @@ def _print_conf(
                 print(conf)
 
 
+def cvf_print(results):
+    print(yaml.dump(yamlfy(results)))
+
+
 def _print_ref_attributes(s):
-    from neuron import h, gui
+    from neuron import h
 
     for i in dir(h):
         try:

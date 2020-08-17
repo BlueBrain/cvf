@@ -1,47 +1,22 @@
-import numpy as np
-from neuron import h, gui  # pycharm could remove gui from here. It is needed
-from recordtype import recordtype
+from neuron import h
 
-from .config_parser import Config
-from .mod_parser import Mod
-from .utils import get_V_steps, get_step_wave_form, Simulators
-
-RunResult = recordtype(
-    "RunResult",
-    [
-        "mechanism",
-        "stimulus",
-        "simulator",
-        "t_steps",
-        "v_steps",
-        ("tvec", []),
-        ("traces", {}),
-    ],
-    default="",
-)
+from .utils import *
 
 
 class Cell:
-    def __init__(self, filepath, config_file_path=None):
-        self.filepath = filepath
-        self.config_file_path = config_file_path
+    def __init__(self, mod, conf, name):
 
-        # Load mod data and set main mechanism
-        self.mod = Mod(self.filepath)
+        # Ref to mod data
+        self.mod = mod
         # Set data from config file
-        self.conf = Config(self.config_file_path, self.mod)
+        self.conf = conf
 
-        self._set_cell()
+        self.name = name
 
-    def _set_cell(self):
-        # Set a few basic things
-        self.soma = h.Section(name="soma")
+        self.soma = h.Section(name=self.name, cell=self)
         self.soma.insert("pas")
-        self.vc = h.cvf_svclamp(self.soma(0.5))
-        self.vc.rs = 0.001
         # Some keywords in channel could be inserted in h or soma directly
-        for att_name, att_value in self.conf.data["channel"].items():
-
+        for att_name, att_value in self.conf["channel"].items():
             try:
                 setattr(self.soma, att_name, att_value)
             except Exception:
@@ -49,102 +24,63 @@ class Cell:
                     setattr(h, att_name, att_value)
                 except Exception:
                     pass
-        # mechanism
-        self.mechanism = self.mod.data["NEURON"]["SUFFIX"][0]
-        self.soma.insert(self.mechanism)
-        # try useion
-        try:
-            for key, value in self.conf.data["channel"]["USEION"]["READ"].items():
-                setattr(self.soma, key, value)
-        except KeyError:
-            pass
 
-    @staticmethod
-    def trace_name(name):
-        return "_ref_{}".format(name)
+    def set_mechanism(self):
+        if "SUFFIX" in self.mod["NEURON"]:
+            # useion
+            self.soma.insert(self.mod.mechanism())
+            # set initial values
+            try:
 
-    def _set_trace(self, traces, name):
-        new_trace = h.Vector()
-        new_trace.record(getattr(self.soma(0.5), self.trace_name(name)))
-        traces[name] = new_trace
+                for key, value in self.conf["channel"]["USEION"]["READ"].items():
+                    setattr(self.soma, key, value)
+            except KeyError:
+                pass
 
-    def _set_traces(self):
-        traces = {}
+        if "POINT_PROCESS" in self.mod["NEURON"]:
+            self.pp = getattr(h, self.mod["NEURON"]["POINT_PROCESS"][0])(self.soma(0.5))
+            try:
+                self.pp.setRNG(
+                    self.conf["channel"]["rng"][0],
+                    self.conf["channel"]["rng"][1],
+                    self.conf["channel"]["rng"][2],
+                )
+            except AttributeError:
+                pass
 
-        for name in self.conf.data["channel"]["USEION"].get("WRITE", []):
-            self._set_trace(traces, name)
+    def record_traces(self):
+
+        self.traces = {}
+
+        for name in self.conf["channel"]["USEION"].get("WRITE", []):
+            record_trace(name, self.soma(0.5), self.traces)
 
         # non-specific currents are inserted with the suffix
-        for name in self.conf.data["channel"].get("NONSPECIFIC_CURRENT", []):
-            self._set_trace(traces, "{}_{}".format(name, self.mechanism))
+        for name in self.conf["channel"].get("NONSPECIFIC_CURRENT", []):
 
-        self._set_trace(traces, "i_membrane_")
+            try:
+                if "POINT_PROCESS" in self.mod["NEURON"]:
+                    record_trace(name, self.pp, self.traces)
+                else:
+                    record_trace(
+                        "{}_{}".format(name, self.mod.mechanism()),
+                        self.soma(0.5),
+                        self.traces,
+                    )
+            except AttributeError:
+                pass
 
-        return traces
+        record_trace("v", self.soma(0.5), self.traces)
 
-    def _get_traces(self, traces):
-        out = {}
-        for key, val in traces.items():
-            out[key] = np.array(val).copy()
-        return out
+    def set_stimulus(self, result):
+        # set std stimulus
+        self.stimulus = h.cvf_svclamp(self.soma(0.5))
+        self.stimulus.rs = 0.001
+        self.stimulus.dur1 = h.tstop
 
-    def run_simulator(self, result):
-
-        h.cvode.use_fast_imem(1)
-        h.cvode.cache_efficient(1)
-
+        # play
         TwaveForm, VwaveForm = get_step_wave_form(result.t_steps, result.v_steps, h.dt)
-
-        self.vc.dur1 = h.tstop
-        TwaveForm = h.Vector(TwaveForm)
-        VwaveForm = h.Vector(VwaveForm)
-
-        VwaveForm.play(self.vc, self.vc._ref_amp1, TwaveForm, 1)
-
-        tvec = h.Vector()
-        tvec.record(h._ref_t)
-
-        # start recording
-        traces = self._set_traces()
-
-        if result.simulator == Simulators.NEURON:
-            h.init()
-            h.run()
-        else:
-            pc = h.ParallelContext()
-            h.stdinit()
-
-            pc.nrncore_run(
-                " -e {} -v {}".format(h.tstop, self.conf.data["channel"]["v_init"]), 0
-            )
-
-        result.tvec = np.array(tvec).copy()
-        result.traces = self._get_traces(traces)
-
-    def run_protocol(self, stimulus, simulator):
-
-        [t_steps, v_steps_zipped] = self.conf.extract_steps_from_stimulus(stimulus)
-        h.tstop = self.conf.data["stimulus"][stimulus]["tstop"]
-        v_steps_mat = get_V_steps(v_steps_zipped)
-
-        results = []
-        for v_steps in v_steps_mat:
-            results.append(
-                RunResult(
-                    mechanism=self.mechanism,
-                    stimulus=stimulus,
-                    simulator=simulator,
-                    t_steps=t_steps,
-                    v_steps=v_steps,
-                )
-            )
-            self.run_simulator(results[-1])
-
-        return results
-
-    def run_all_protocols(self, simulator):
-        results = []
-        for protocol_name in self.conf.data["stimulus"]:
-            results += self.run_protocol(protocol_name, simulator)
-
-        return results
+        self.stimulus_input = [h.Vector(TwaveForm), h.Vector(VwaveForm)]
+        self.stimulus_input[1].play(
+            self.stimulus, self.stimulus._ref_amp1, self.stimulus_input[0], 1
+        )

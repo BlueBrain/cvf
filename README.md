@@ -73,4 +73,19 @@ You can directly call the module commands from bash:
 python -c "from channel_validation_framework.commands import *; cvf_stdrun()"
 ```
 
+## Additional features
+
+The following snippet offers some insight on CVF capabilities:
+
+```python
+    from channel_validation_framework.commands import *
+
+    r = run() #run the tests and get the results
+    cvf_print(r) #pretty print of a recap of the results
+    compare(r)
+    plot(r)
+```
+
+
+
 

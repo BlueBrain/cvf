@@ -14,16 +14,15 @@ class ConfigParserError(Exception):
     pass
 
 
-class Config:
+class Config(dict):
     # Read the file and fill config
     # I know there are some if-else. However, with this small number of sections (2)
     # it is ok IMO
 
-    data = {}
-
     def __init__(self, filepath=None, mod=None):
         self.filepath = filepath
         self.mod = mod
+        # self._data = {}
 
         if filepath is None and mod is None:
             raise ConfigParserError(
@@ -46,45 +45,38 @@ class Config:
                 self._read_from_yaml()
 
     def _autogenerate(self):
-        # try useion template
-        self.filepath = "config" + os.sep + "template_useion.yaml"
+        # try template
+        self.filepath = "config" + os.sep + "template.yaml"
         self._read_from_yaml()
-        self._fill_useion_template()
+        self._fill_template()
 
     # fill the template with mod data
-    def _fill_useion_template(self):
-        try:
-            # useion sub-block
-            self.data["channel"]["SUFFIX"] = self.mod.data["NEURON"]["SUFFIX"]
-            if "WRITE" in self.mod.data["NEURON"]["USEION"]:
-                self.data["channel"]["USEION"]["WRITE"] = self.mod.data["NEURON"][
-                    "USEION"
-                ]["WRITE"]
+    def _fill_template(self):
+        # useion
+        fill_or_delete_key = "WRITE"
+        fill_or_delete_dictkey(
+            self["channel"]["USEION"],
+            fill_or_delete_key,
+            self.mod["NEURON"].get("USEION", {}).get(fill_or_delete_key, {}),
+        )
 
-            fill_or_delete_key = "READ"
-            fill_or_delete_dictkey(
-                self.data["channel"]["USEION"],
-                fill_or_delete_key,
-                self.mod.data["NEURON"]["USEION"].get(fill_or_delete_key, []),
-            )
+        fill_or_delete_key = "READ"
+        fill_or_delete_dictkey(
+            self["channel"]["USEION"],
+            fill_or_delete_key,
+            self.mod["NEURON"].get("USEION", {}).get(fill_or_delete_key, {}),
+        )
 
-            fill_or_delete_key = "NONSPECIFIC_CURRENT"
-            fill_or_delete_dictkey(
-                self.data["channel"],
-                fill_or_delete_key,
-                self.mod.data["NEURON"].get(fill_or_delete_key, []),
-            )
-
-        except IndexError or KeyError:
-            raise ConfigParserError(
-                'Automatic extrapolation from mod file "{}" not supported'.format(
-                    self.mod.filepath
-                )
-            )
+        fill_or_delete_key = "NONSPECIFIC_CURRENT"
+        fill_or_delete_dictkey(
+            self["channel"],
+            fill_or_delete_key,
+            self.mod["NEURON"].get(fill_or_delete_key, {}),
+        )
 
     def _read_from_yaml(self):
         with open(self.filepath, "r") as file:
-            self.data = yaml.load(file, Loader=yaml.FullLoader)
+            self.update(yaml.load(file, Loader=yaml.FullLoader))
 
     def _read_raw_in(self):
         with open(self.filepath, "r") as file_iter:
@@ -101,7 +93,7 @@ class Config:
                                     parsed_line[1], str(section_data)
                                 )
                             )
-                        self.data["channel"] = section_data
+                        self["channel"] = section_data
 
                     elif parsed_line[0] == "Stimulus":
                         if isinstance(section_data, ConfigParserError):
@@ -110,10 +102,10 @@ class Config:
                                     parsed_line[1], str(section_data)
                                 )
                             )
-                        if "stimulus" in self.data:
-                            self.data["stimulus"][parsed_line[1]] = section_data
+                        if "stimulus" in self:
+                            self["stimulus"][parsed_line[1]] = section_data
                         else:
-                            self.data["stimulus"] = {parsed_line[1]: section_data}
+                            self["stimulus"] = {parsed_line[1]: section_data}
 
                     else:
                         logging.warning("Skipped unknown config section: {}", line)
@@ -126,21 +118,30 @@ class Config:
 
         # suffix
         try:
-            self.data["channel"]["SUFFIX"] = self.data["channel"].pop("suffix")
+            self["channel"]["SUFFIX"] = self["channel"].pop("suffix")
         except KeyError:
             pass
 
         # useion
         try:
-            read = {self.data["channel"]["revName"]: self.data["channel"]["revValue"]}
-            write = [self.data["channel"]["current"]]
-            self.data["channel"]["USEION"] = {"READ": read, "WRITE": write}
+            read = {self["channel"]["revName"]: self["channel"]["revValue"]}
+            write = [self["channel"]["current"]]
+            self["channel"]["USEION"] = {"READ": read, "WRITE": write}
 
             del [
-                self.data["channel"]["revName"],
-                self.data["channel"]["revValue"],
-                self.data["channel"]["current"],
+                self["channel"]["revName"],
+                self["channel"]["revValue"],
+                self["channel"]["current"],
             ]
+        except KeyError:
+            pass
+
+        # stimulus
+        try:
+            for stimulus_name in self["stimulus"]:
+                [t_steps, v_steps] = self._extract_steps_from_stimulus(stimulus_name)
+                self["stimulus"][stimulus_name]["t_steps"] = t_steps
+                self["stimulus"][stimulus_name]["v_steps"] = v_steps
         except KeyError:
             pass
 
@@ -149,10 +150,10 @@ class Config:
             filepath = os.path.splitext(self.filepath)[0] + ".yaml"
 
         with open(filepath, "w") as file:
-            yaml.dump(self.data, file)
+            yaml.dump(self._data, file)
 
     def __str__(self):
-        return "\n filepath: " + self.filepath + "\n\n" + yaml.dump(self.data)
+        return "\n filepath: " + self.filepath + "\n\n" + yaml.dump(self)
 
     @staticmethod
     def _skip_section(file_iter):
@@ -194,10 +195,11 @@ class Config:
 
         return info
 
-    def extract_steps_from_stimulus(self, stimulus_name):
+    def _extract_steps_from_stimulus(self, stimulus_name):
+
         t = []
         v = []
-        map0 = self.data["stimulus"][stimulus_name]
+        map0 = self["stimulus"][stimulus_name]
 
         # extract tsteps
         n = 1
@@ -209,11 +211,17 @@ class Config:
         if "vhold" and "vmax" in map0.keys():
             vmin = map0["vhold"]
             vmax = map0["vmax"]
-            v = np.linspace(vmin, vmax, len(t))
+            v = np.linspace(vmin, vmax, len(t)).tolist()
+            del map0["vhold"]
+            del map0["vmax"]
         else:
             n = 1
             while "vhold" + str(n) in map0.keys():
                 v.append(map0["vhold" + str(n)])
                 n += 1
+
+        delete_keys = [k for k, v in map0.items() if "hold" in k]
+        for i in delete_keys:
+            del map0[i]
 
         return t, v

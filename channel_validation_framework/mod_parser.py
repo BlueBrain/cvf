@@ -11,7 +11,7 @@ class ModParserError(Exception):
     pass
 
 
-class Mod:
+class Mod(dict):
 
     supported_keywords = {
         "SUFFIX",
@@ -26,11 +26,11 @@ class Mod:
     }
 
     def __str__(self):
-        return "\n filepath: " + self.filepath + "\n\n" + yaml.dump(self.data)
+        return "\n filepath: " + self.filepath + "\n\n" + yaml.dump(self)
 
     def __init__(self, filepath):
         self.filepath = filepath
-        self.data = {}
+        # self._data = {}
 
         with open(self.filepath, "r") as file_iter:
             for line in file_iter:
@@ -39,9 +39,19 @@ class Mod:
                     continue
 
                 if line.startswith("NEURON"):
-                    smart_merge(self.data, "NEURON", self._parse_section(file_iter))
+                    smart_merge(self, "NEURON", self._parse_section(file_iter))
 
+                elif line.startswith("NET_RECEIVE"):
+                    self["NET_RECEIVE"] = 1
                     break
+
+    def mechanism(self):
+        if "SUFFIX" in self["NEURON"]:
+            return self["NEURON"]["SUFFIX"][0]
+        elif "POINT_PROCESS" in self["NEURON"]:
+            return self["NEURON"]["POINT_PROCESS"][0]
+        else:
+            return None
 
     def _purify_line(self, line):
         return line.split(":", 1)[0].replace(",", " ").strip()

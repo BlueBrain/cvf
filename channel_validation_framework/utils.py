@@ -17,6 +17,58 @@ class Simulators(IntEnum):
     CORENEURON_NMODLSYMPY_CONDUCTANCEC = auto()
 
 
+def nparray_yamlfy(vec):
+    with np.printoptions(precision=3):
+        return {"len": len(vec), "array": vec.__str__()}
+
+
+def yamlfy(obj):
+
+    primitive_types = (float, str, int)
+    if isinstance(obj, primitive_types):
+        return obj
+
+    if isinstance(obj, Simulators):
+        return obj.name
+
+    if hasattr(obj, "yamlfy"):
+        return obj.yamlfy()
+
+    if isinstance(obj, list):
+        return list(map(yamlfy, obj))
+
+    if isinstance(obj, dict):
+        return {
+            (k, k.name)[isinstance(k, Simulators)]: yamlfy(v) for k, v in obj.items()
+        }
+
+    attributes = [i for i in dir(obj) if not i.startswith("__")]
+    out = {}
+    for i in attributes:
+        val = getattr(obj, i)
+        out[i] = yamlfy(val)
+    return out
+
+
+def std_trace_name(name):
+    return "_ref_{}".format(name)
+
+
+def record_trace(name, from_obj, traces, is_std=True):
+    from neuron import h
+
+    traces[name] = h.Vector()
+    if is_std:
+        traces[name].record(getattr(from_obj, std_trace_name(name)))
+    else:
+        traces[name].record(getattr(from_obj, name))
+
+
+def convert_and_copy_traces(traces, out, prefix=""):
+    for key, val in traces.items():
+        out[prefix + key] = np.array(val).copy()
+
+
 def silent_remove(dirs):
     for dir in dirs:
         filenames = glob.glob(dir)
@@ -41,14 +93,23 @@ def get_step_wave_form(t, v, dt):
     return tvec, vvec
 
 
-# dic[key] = {key_list[0]:dic[key], key_list[1]:dic[key], ... , key_list[n]:dic[key]}
-# or
-# del dic[key]
+def float2short_str(val):
+    if isinstance(val, float) and not np.isnan(val) and not np.isinf(val):
+        if not val:
+            return "0.0"
+        else:
+            return "~1.e{}".format(int(np.log10(val)))
+    else:
+        return str(val)
+
+
 def fill_or_delete_dictkey(dic, key, key_list):
     if not key_list:
-        del dic[key]
-    else:
+        dic.pop(key, None)
+    elif key in dic:
         dic[key] = dict(zip(key_list, [dic[key]] * len(key_list)))
+    else:
+        dic[key] = key_list
 
 
 def get_V_steps(v):
@@ -93,6 +154,13 @@ def smart_merge(map, key, section):
 
 
 def compute_mse(a, b):
+
+    if not len(a) + len(b):
+        return 0.0
+
+    if len(a) != len(b):
+        return float("Inf")
+
     return ((a - b) ** 2).mean()
 
 
