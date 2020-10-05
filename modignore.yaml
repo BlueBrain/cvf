@@ -1,11 +1,8 @@
-cvf_svclmp: reserved for cvf
-netstim_inhpoisson: artificial cell not supported
-NaTa_t: to be used in conjunction with TTXDynamicsSwitch. Not supported
-NaTs2_t: to be used in conjunction with TTXDynamicsSwitch. Not supported
-NaTg: to be used in conjunction with TTXDynamicsSwitch. Not supported
-NaV: to be used in conjunction with TTXDynamicsSwitch. Not supported
-VecStim: artificial cell not supported
-GluSynapse: does not compile correctly
-StochKv: setRNG for suffix not supported
-TTXDynamicsSwitch: to be used in conjunction with other files. Not supported
-
+nocompile:
+    netstim_inhpoisson: artificial cell not supported
+    VecStim: artificial cell not supported
+    GluSynapse: does not compile correctly
+    StochKv: setRNG for suffix not supported
+notest:
+    TTXDynamicsSwitch: service mechanism used in conjunction with others. Testing it alone is not meaningful
+    cvf_svclmp: reserved for cvf

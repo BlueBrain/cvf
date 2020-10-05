@@ -1,0 +1,89 @@
+wiggle_no_res:
+  global:
+    data:
+      v_init: -30.0
+  sections:
+    soma:
+      data:
+        L: 20.0
+        Ra: 150.0
+        diam: 20.0
+        g_pas: 3.334e-05
+      inputs:
+        v:
+          t_steps:
+          - 100.0
+          - 800.0
+          - 400.0
+          - 400.0
+          - 400.0
+          - 200.0
+          - 400.0
+          - 100.0
+          - 100.0
+          y_steps:
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+      mechanisms:
+        NaTg:
+          data:
+            ena: -88
+          type: SUFFIX
+        TTXDynamicsSwitch:
+          type: SUFFIX
+          data:
+            ttxo_level_TTXDynamicsSwitch: 1.0e-05
+      record_traces:
+      - ina
+wiggle:
+  global:
+    data:
+      v_init: -30.0
+  sections:
+    soma:
+      data:
+        L: 20.0
+        Ra: 150.0
+        diam: 20.0
+        g_pas: 3.334e-05
+      inputs:
+        v:
+          t_steps:
+          - 100.0
+          - 800.0
+          - 400.0
+          - 400.0
+          - 400.0
+          - 200.0
+          - 400.0
+          - 100.0
+          - 100.0
+          y_steps:
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+          - 20.0
+          - -20.0
+      mechanisms:
+        NaTg:
+          data:
+            ena: -88
+          type: SUFFIX
+        TTXDynamicsSwitch:
+          type: SUFFIX
+          data:
+            ttxo_level_TTXDynamicsSwitch: 1.0e-12
+      record_traces:
+      - ina
+

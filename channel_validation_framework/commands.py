@@ -76,7 +76,7 @@ def run(
         # prepare working dir
         working_dir = "{}_{}".format(base_working_dir, simulator.name)
         copy_to_working_dir_log = utils.init_working_dir(
-            additional_mod_folders, working_dir, modignore
+            additional_mod_folders, working_dir, modignore["nocompile"]
         )
 
         subprocess.run(["nrnivmodl", "mod"], cwd=working_dir)
@@ -88,7 +88,7 @@ def run(
             simulator,
             configpath,
             config_protocol_generator,
-            modignore,
+            modignore["notest"],
             working_dir,
             print_config,
         )
@@ -97,7 +97,7 @@ def run(
                 RunResult(
                     result=Result.SKIP,
                     modfile=Path(name).stem,
-                    result_msg=modignore[Path(name).stem],
+                    result_msg=modignore["nocompile"][Path(name).stem],
                 )
                 for name, is_copied in copy_to_working_dir_log.items()
                 if not is_copied

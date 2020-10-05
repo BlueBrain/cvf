@@ -214,7 +214,7 @@ def copy_to_working_dir(srcs, dst, ext="", ignoreset={}):
 
             name = Path(filepath).stem
 
-            is_copied = name.startswith("cvf_") or name not in ignoreset
+            is_copied = name not in ignoreset
 
             if is_copied:
                 shutil.copyfile(filepath, os.path.join(dst, name + ext))

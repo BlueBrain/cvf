@@ -5,7 +5,7 @@ from channel_validation_framework import commands
 #     print(i)
 #     i.dump_to_yaml()
 
-r = commands.run(print_config=False)
+r = commands.run(print_config=True)
 commands.cvf_print(r)
 commands.compare(r, is_fail_on_error=False)
 commands.plot(

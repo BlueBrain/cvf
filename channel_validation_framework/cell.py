@@ -15,8 +15,8 @@ class Cell:
         self.section.insert("pas")
 
         logging.info("SET CELL {}".format(self.name))
-        utils.set_data(self.conf, self.section)
         self._set_mechanisms()
+        utils.set_data(self.conf, self.section)
 
         if "record_traces" in self.conf:
             self._record_traces(self.conf["record_traces"])
@@ -39,6 +39,8 @@ class Cell:
                     self.pp = getattr(h, mech)(self.section(0.5))
                     if "rng" in mech_conf:
                         self.pp.setRNG(*mech_conf["rng"])
+
+                utils.set_data(mech_conf, self.section)
 
     def _record_traces(self, dic, suffix=""):
         for i in dic:
