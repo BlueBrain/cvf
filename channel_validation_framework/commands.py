@@ -1,3 +1,4 @@
+import argparse
 import glob
 import logging
 import os
@@ -30,14 +31,38 @@ class CompareTestResultsError(Exception):
 
 def cvf_stdrun():
 
-    configpath = sys.argv[1] if len(sys.argv) > 1 else "config"
-    modignorepath = sys.argv[2] if len(sys.argv) > 2 else "modignore.yaml"
-    additional_mod_folders = sys.argv[3:] if len(sys.argv) > 3 else []
+    parser = argparse.ArgumentParser(
+        description="Channel-validation-framework standard test run"
+    )
+
+    parser.add_argument(
+        "-c",
+        "--config",
+        default="config",
+        type=str,
+        help="folder in where there are the confic files (i.e. cvf_template.yaml)",
+    )
+    parser.add_argument(
+        "-m",
+        "--modignore",
+        default="modignore.yaml",
+        type=str,
+        help="location of the modignore.yaml file",
+    )
+    parser.add_argument(
+        "additional_mod_folders",
+        nargs="*",
+        default=[],
+        type=str,
+        help="additional mod folders that are to be processed (non-recursive)",
+    )
+
+    args = parser.parse_args()
 
     results = run(
-        configpath=configpath,
-        additional_mod_folders=additional_mod_folders,
-        modignorepath=modignorepath,
+        configpath=args.config,
+        additional_mod_folders=args.additional_mod_folders,
+        modignorepath=args.modignore,
     )
 
     compare(results)
@@ -94,13 +119,13 @@ def run(
         )
 
         out[simulator].extend(
-                RunResult(
-                    result=Result.SKIP,
-                    modfile=Path(name).stem,
-                    result_msg=modignore["nocompile"][Path(name).stem],
-                )
-                for name, is_copied in copy_to_working_dir_log.items()
-                if not is_copied
+            RunResult(
+                result=Result.SKIP,
+                modfile=Path(name).stem,
+                result_msg=modignore["nocompile"][Path(name).stem],
+            )
+            for name, is_copied in copy_to_working_dir_log.items()
+            if not is_copied
         )
 
     return out
@@ -122,11 +147,18 @@ def _simulator_run(
             config = Config(
                 configpath, modpath, config_protocol_generator, print_config
             )
-            sim = Simulation(working_dir, config,)
+            sim = Simulation(
+                working_dir,
+                config,
+            )
             results.extend(sim.run_all_protocols(simulator))
         else:
             results.append(
-                RunResult(result=Result.SKIP, modfile=name, result_msg=modignore[name],)
+                RunResult(
+                    result=Result.SKIP,
+                    modfile=name,
+                    result_msg=modignore[name],
+                )
             )
     return results
 
@@ -199,11 +231,17 @@ def plot(results):
             )
         elif is_log:
             pplt.plot(
-                t, np.log10(abs(v)), color=col, label=label,
+                t,
+                np.log10(abs(v)),
+                color=col,
+                label=label,
             )
         else:
             pplt.plot(
-                t, v, color=col, label=label,
+                t,
+                v,
+                color=col,
+                label=label,
             )
 
     remove_duplicate_log = set()

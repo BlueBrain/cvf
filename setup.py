@@ -36,7 +36,10 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    extras_require=dict(plotting=["matplotlib"], full=["matplotlib"],),
+    extras_require=dict(
+        plotting=["matplotlib"],
+        full=["matplotlib"],
+    ),
     install_requires=["recordtype", "termcolor", "pyyaml", "numpy", "pyyaml"],
     entry_points=dict(
         console_scripts=[

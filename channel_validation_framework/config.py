@@ -321,7 +321,9 @@ class Config(dict):
         if simulation_scenario == self.SimulationScenario.PRE_POST_SEC:
 
             self["sections"] = {
-                section_names[0]: {"data": data,},
+                section_names[0]: {
+                    "data": data,
+                },
                 section_names[1]: {
                     "data": data,
                     "mechanisms": mechanisms,
