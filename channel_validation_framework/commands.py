@@ -80,9 +80,16 @@ def run(
         )
 
         subprocess.run(["nrnivmodl", "mod"], cwd=working_dir)
+
+        simulator_flags = {
+            utils.Simulators.CORENEURON_NMODLSYMPY_ANALYTIC: "sympy --analytic"
+        }
         if simulator is not utils.Simulators.NEURON:
             # TODO: add support for compiling with different sympy options
-            subprocess.run(["nrnivmodl-core", "mod"], cwd=working_dir)
+            subprocess.run(
+                ["nrnivmodl-core", "-a", simulator_flags[simulator], "mod"],
+                cwd=working_dir,
+            )
 
         out[simulator] = _simulator_run(
             simulator,
@@ -94,13 +101,13 @@ def run(
         )
 
         out[simulator].extend(
-                RunResult(
-                    result=Result.SKIP,
-                    modfile=Path(name).stem,
-                    result_msg=modignore["nocompile"][Path(name).stem],
-                )
-                for name, is_copied in copy_to_working_dir_log.items()
-                if not is_copied
+            RunResult(
+                result=Result.SKIP,
+                modfile=Path(name).stem,
+                result_msg=modignore["nocompile"][Path(name).stem],
+            )
+            for name, is_copied in copy_to_working_dir_log.items()
+            if not is_copied
         )
 
     return out
@@ -122,11 +129,18 @@ def _simulator_run(
             config = Config(
                 configpath, modpath, config_protocol_generator, print_config
             )
-            sim = Simulation(working_dir, config,)
+            sim = Simulation(
+                working_dir,
+                config,
+            )
             results.extend(sim.run_all_protocols(simulator))
         else:
             results.append(
-                RunResult(result=Result.SKIP, modfile=name, result_msg=modignore[name],)
+                RunResult(
+                    result=Result.SKIP,
+                    modfile=name,
+                    result_msg=modignore[name],
+                )
             )
     return results
 
@@ -199,11 +213,17 @@ def plot(results):
             )
         elif is_log:
             pplt.plot(
-                t, np.log10(abs(v)), color=col, label=label,
+                t,
+                np.log10(abs(v)),
+                color=col,
+                label=label,
             )
         else:
             pplt.plot(
-                t, v, color=col, label=label,
+                t,
+                v,
+                color=col,
+                label=label,
             )
 
     remove_duplicate_log = set()

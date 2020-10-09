@@ -43,7 +43,13 @@ class Simulation:
     def run(self, result):
 
         q = Queue()
-        p = Process(target=self._worker_run, args=(result, q,),)
+        p = Process(
+            target=self._worker_run,
+            args=(
+                result,
+                q,
+            ),
+        )
 
         p.start()
         while p.is_alive():

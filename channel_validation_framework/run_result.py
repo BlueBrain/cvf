@@ -49,7 +49,12 @@ class RunResult(
                 self.protocol, max(self.mse)
             ) + ", ".join(
                 [
-                    ": ".join(map(float2short_str, i,))
+                    ": ".join(
+                        map(
+                            float2short_str,
+                            i,
+                        )
+                    )
                     for i in zip(self.traces, self.mse)
                 ]
             )
