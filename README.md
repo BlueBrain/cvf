@@ -4,87 +4,47 @@ CVF aims to validate nmodl comparing its results with mod2c traces. The general 
 
 ![scheme](scheme.png)
 
-For each mechanism in the mod folder the program:
-- uses nmodl and mod2c to generate c++ and c code respectively
-- generates single-cell system using the appropriate configuration file (more on this later)
-- runs the simulations with coreneuron/neuron
-- compares the relevant traces
+- `run_config.yaml` is read: this gives us the setups for all the simulators that are going to be tested. Check the
+ file for more info.
+- For each simulator we compile (in its appropriate `tmp_*` folder) all the mod files (default in `mod/local`; you
+ can add folders)
+- For each mod file CVF automatically (it is magic!) generates a `config` object that dictates how the simulations
+ for that mod file must be done: how many cells, what stimuli, on which cells etc. If you prefer to specify how the
+  mod file must be tested you can add a config file in `config/<mod_file_name>.yaml` (it must have the same name as
+   the mod file). You can check the other files present in `config/` for inspiration
+- Simulations are run and compared (numerically and, possibly, visually)
 
-For each mechanism in the mod file and each stimulus in the appropriate configuration file, CVF runs a simulation and compares traces. Thus, if we want to test nmodl on a new mechanism we need to provide:
-- the mod file
-- the configuration file (in case the mechanism class is new)
-
-### The configuration file
-
-The configuration file is specific for a class of channels (i.e. all the kv channels) and instructs the code on:
-- how to stimulate the cell (comparisons among various stimuli) 
-- what traces must be compared. In other words, what current/voltages are relevant in the simulation
-- what are the numerical values of the various constants required by the channel (i.e. reverse potentials, conductances etc.)
-
-### Auxiliary mechanisms/point processes
-
-In case you need to add an auxiliary mechanism/point process (A) required to analyze mechanism (B) that should not be analyzed itself by the code (i.e. a custom point process to inject a stimulus) the name of the mechanism must be prepended with "custom".  
 
 ## Installation
 
-In order to use CVF you need coreneuron (with nmodl) and neuron installed. In case you do not have them you can get [bbp spack](https://github.com/BlueBrain/spack) and follow the installation guide for your particular sistem. After, you need to get neuron and coreneuron (with nmodl):  
+In order to use CVF you need the various neuron and coreneurons that you are going to use (specified in `run_config
+.yaml`) installed with spack. For the standard cvf you need to do:
 
 ```bash
-spack install coreneuron@develop+sympy+nmodl ^nmodl@develop ^bison@3.4.2
-
-spack install neuron@develop
-
-source $SPACK_ROOT/share/spack/setup-env.sh
-module av neuron coreneuron
+spack install neuron@develop~mpi
+spack install coreneuron@develop~mpi~report ^bison@3.4.2
+spack install coreneuron@develop+nmodl~mpi~report ^nmodl@develop ^bison@3.4.2
+spack install coreneuron@develop+nmodl+ispc~mpi~report ^nmodl@develop ^bison@3.4.2
 ```
 
-where `module av neuron coreneuron` should return 
-```bash
-[...]
-neuron/develop
-[...]
-coreneuron/develop
-```
+### How to run CVF
 
-## Running installing the python module
+CVF can be run in 2 ways:
+- Install cvf and run cvf_stdrun to do a standard check
+    - Load libraries `module load neuron/develop nmodl/develop`
+    - Create a python virtual env `python -m venv venv`
+    - Activate it `source venv/bin/activate`
+    - Install cvf `python3 setup.py install`
+    - Call the standard run `cvf_stdrun`
 
-```Python
-python setup.py install
-```
+- SUGGESTED:
+    - Load the libraries `module load neuron/develop nmodl/develop`
+    - Add your mod files in `mod/local`
+    - Modify `run_config.yaml` to set up the various run configurations
+    - Run your own python script (check `example.py` for inspirations). The functions exposed to public (in `channel
+    -validation-framework/commands`) have python docstring to describe their functionalities
 
-Now you can call svc_stdrun from command line:
 
-```Bash
-svc_stdrun
-```
-
-... or use the commands from the module in python. For example, for the standard run:
-
-```python
-from channel_validation_framework.commands import cvf_stdrun
-cvf_stdrun()
-```
-
-## Running without installing
-
-You can directly call the module commands from bash:
-
-```bash
-python -c "from channel_validation_framework.commands import *; cvf_stdrun()"
-```
-
-## Additional features
-
-The following snippet offers some insight on CVF capabilities:
-
-```python
-    from channel_validation_framework.commands import *
-
-    r = run() #run the tests and get the results
-    cvf_print(r) #pretty print of a recap of the results
-    compare(r)
-    plot(r)
-```
 
 
 

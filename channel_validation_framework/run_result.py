@@ -24,7 +24,7 @@ class RunResult(
             "result_msg",
             "modfile",
             "protocol",
-            "simulator",
+            "run_name",
             ("tvec", []),
             ("traces", {}),
             ("mse", [-1.0]),
@@ -34,7 +34,7 @@ class RunResult(
 ):
     def yamlfy(self):
         return {
-            "result": self.result,
+            "result": self.result.name,
             "result_msg": self.result_msg,
             "modfile": self.modfile,
             "protocol": self.protocol,

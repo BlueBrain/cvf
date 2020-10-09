@@ -6,11 +6,11 @@ import os
 from enum import Enum, auto
 from pathlib import Path
 
-import numpy as np
 import yaml
+import numpy as np
 
 from .mod import Mod
-from .utils import NameGen
+from .utils import NameGen, NoAliasDumper
 
 
 class ConfigParserError(Exception):
@@ -107,14 +107,14 @@ class Config(dict):
             )
 
         with open(confpath, "w") as file:
-            yaml.dump(dict(self), file)
+            yaml.dump(dict(self), file, Dumper=NoAliasDumper)
 
     def __str__(self):
         return (
             "\nCONFIG FILE:\n --- \nconfpath: "
             + self.confpath
             + "\n\n"
-            + yaml.dump(dict(self))
+            + yaml.dump(dict(self), Dumper=NoAliasDumper)
             + " --- \n"
         )
 
@@ -282,68 +282,3 @@ class Config(dict):
                     break
             if self.protocol_generator == self.ProtocolGenerator.SI_FIRST_INPUT:
                 break
-
-    def _autogen_old(self, template, protocols):
-
-        mech_type, mech_name = self.mod.mechanism()
-        useion_read = self.mod.get_useion_read()
-        useion_write = self.mod.get_useion_write()
-
-        # global data
-        self["global"] = template["global"]
-        # data
-        data = template["sections"]["data"]
-
-        # mechanisms
-        mechanisms = {"type": mech_type}
-        if useion_read.items():
-            mech_data = {
-                k: template["mechanisms"]["data"][v["unit"]]
-                for k, v in useion_read.items()
-                if "value" not in v
-            }
-            if mech_data:
-                mechanisms["data"] = mech_data
-        if self.mod._is_setRNG():
-            mechanisms["rng"] = template["mechanisms"]["rng"]
-
-        mechanisms = {mech_name: mechanisms}
-
-        # record traces
-        record_traces = list(useion_write)
-        nonspecific_currents = self.mod.get_nonspecific_current()
-        if mech_type == "SUFFIX":
-            nonspecific_currents = [i + "_" + mech_name for i in nonspecific_currents]
-        record_traces.extend(nonspecific_currents)
-
-        # fill sections
-        simulation_scenario, section_names = self.simulation_scenario()
-        if simulation_scenario == self.SimulationScenario.PRE_POST_SEC:
-
-            self["sections"] = {
-                section_names[0]: {
-                    "data": data,
-                },
-                section_names[1]: {
-                    "data": data,
-                    "mechanisms": mechanisms,
-                    "record_traces": record_traces,
-                },
-            }
-
-            # netcons
-            self["netcons"] = {
-                "nc": {
-                    "source": {section_names[0]: "v"},
-                    "target": section_names[1],
-                    "data": template["netcons"]["data"],
-                }
-            }
-        elif simulation_scenario == self.SimulationScenario.SINGLE_SEC:
-            self["sections"] = {
-                "soma": {
-                    "data": data,
-                    "mechanisms": mechanisms,
-                    "record_traces": record_traces,
-                }
-            }

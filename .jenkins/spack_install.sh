@@ -33,15 +33,17 @@ fi
 
 spack config get modules
 
+check_patch_project neuron "$NEURON_BRANCH"
+spack install neuron@develop~mpi
+
 check_patch_project coreneuron "$CORENEURON_BRANCH"
 check_patch_project nmodl "$NMODL_BRANCH"
 
 module load unstable python-dev
 
-spack install coreneuron@develop+sympy+nmodl~mpi~report ^nmodl@develop ^bison@3.4.2
-
-check_patch_project neuron "$NEURON_BRANCH"
-spack install neuron@develop~mpi
+spack install coreneuron@develop~mpi~report ^bison@3.4.2
+spack install coreneuron@develop+nmodl~mpi~report ^nmodl@develop ^bison@3.4.2
+spack install coreneuron@develop+nmodl+ispc~mpi~report ^nmodl@develop ^bison@3.4.2
 
 source $SPACK_ROOT/share/spack/setup-env.sh
 module av

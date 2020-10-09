@@ -1,9 +1,10 @@
 import argparse
+import copy
 import glob
 import logging
 import os
 import subprocess
-import sys
+import warnings
 from itertools import cycle
 from pathlib import Path
 
@@ -36,37 +37,35 @@ def cvf_stdrun():
     """
 
     parser = argparse.ArgumentParser(
-        description="Channel-validation-framework standard test run"
+        description="Channel-validation-framework standard test run."
     )
-
     parser.add_argument(
         "-c",
         "--config",
         default="config",
         type=str,
-        help="folder of  the config files (i.e. cvf_template.yaml)",
+        help="Directory of the config files (i.e. cvf_template.yaml).",
     )
     parser.add_argument(
-        "-m",
-        "--modignore",
-        default="modignore.yaml",
+        "-r",
+        "--run_config",
+        default="run_config.yaml",
         type=str,
-        help="location of the modignore.yaml file",
+        help="Location of the run_config.yaml file.",
     )
     parser.add_argument(
-        "additional_mod_folders",
+        "mod_dirs",
         nargs="*",
-        default=[],
+        default=["mod/cvf", "mod/local"],
         type=str,
-        help="additional mod folders that are to be processed (non-recursive)",
+        help="Mod dirs that are to be processed (non-recursive).",
     )
-
     args = parser.parse_args()
 
     results = run(
-        configpath=args.config,
-        additional_mod_folders=args.additional_mod_folders,
-        modignorepath=args.modignore,
+        config_files_dir=args.config,
+        mod_dirs=args.mod_dirs,
+        run_config_path=args.run_config,
     )
 
     compare(results)
@@ -75,135 +74,142 @@ def cvf_stdrun():
 
 
 def run(
-    configpath="config",
+    config_files_dir="config",
     config_protocol_generator=Config.ProtocolGenerator.SI_FIRST_PROTOCOL,
-    additional_mod_folders=[],
-    modignorepath="modignore.yaml",
-    simulators={
-        utils.Simulators.NEURON,
-        utils.Simulators.CORENEURON_NMODLSYMPY_ANALYTIC,
-    },
+    mod_dirs=["mod/cvf", "mod/local"],
+    run_config_path="run_config.yaml",
     base_working_dir="tmp",
     print_config=False,
+    clear_working_dir=True,
 ):
     """Main cvf function for running tests
 
     - set up the working directory
     - generate appropriate libs (neuron, coreneuron etc.)
-    - call _simulator_run: once for each simulator
+    - call _single_run: once for each run_name
 
     Args:
         "cvf_stdrun -h" for args info
 
     Returns:
-        out (dict): One RunResult for each simulator, protocol, mod file combination
+        out (dict): One RunResult for each run_name, protocol, mod file combination
     """
 
     logging.getLogger().setLevel(logging.INFO)
 
     # clear the state
-    utils.silent_remove([base_working_dir + "_*"])
+    if clear_working_dir:
+        utils.silent_remove([base_working_dir + "_*"])
 
-    configpath = os.path.abspath(configpath)
+    config_files_dir = os.path.abspath(config_files_dir)
 
-    modignore = {}
-    if modignorepath:
-        modignorepath = os.path.abspath(modignorepath)
-        with open(modignorepath, "r") as file:
-            modignore = yaml.load(file, Loader=yaml.FullLoader)
+    run_config_path = os.path.abspath(run_config_path)
+    with open(run_config_path, "r") as file:
+        global_run_config = yaml.load(file, Loader=yaml.FullLoader)
+
+    # Split run config
+    global_modignore = global_run_config.pop("modignore")
 
     out = {}
-    for simulator in simulators:
+    for run_name, run_config in global_run_config.items():
+        modignore = copy.deepcopy(global_modignore)
+
+
+
+        utils.nonoverriding_merge(modignore, run_config.get("modignore", {}))
 
         # prepare working dir
-        working_dir = "{}_{}".format(base_working_dir, simulator.name)
-        copy_to_working_dir_log = utils.init_working_dir(
-            additional_mod_folders, working_dir, modignore["nocompile"]
-        )
+        working_dir = "{}_{}".format(base_working_dir, run_name)
+        copy_to_working_dir_log = {}
+        if clear_working_dir:
+            copy_to_working_dir_log, _ = utils.init_working_dir(
+                mod_dirs,
+                working_dir,
+                modignore.get("nocompile", {}),
+            )
 
-        subprocess.run(["nrnivmodl", "mod"], cwd=working_dir)
-        if simulator is not utils.Simulators.NEURON:
-            # TODO: add support for compiling with different sympy options
-            subprocess.run(["nrnivmodl-core", "mod"], cwd=working_dir)
+        # compile mechanisms
+        for cmd in run_config["compile_commands"]:
+            subprocess.run(cmd, cwd=working_dir, shell=True, env=os.environ)
 
-        out[simulator] = _simulator_run(
-            simulator,
-            configpath,
+        out[run_name] = _single_run(
+            run_name,
+            config_files_dir,
             config_protocol_generator,
-            modignore["notest"],
+            modignore.get("notest", {}),
             working_dir,
             print_config,
         )
 
-        out[simulator].extend(
-            RunResult(
-                result=Result.SKIP,
-                modfile=Path(name).stem,
-                result_msg=modignore["nocompile"][Path(name).stem],
-            )
-            for name, is_copied in copy_to_working_dir_log.items()
-            if not is_copied
+        out[run_name].update(
+            {
+                modignore.get("nocompile", {})[Path(name).stem]: RunResult(
+                    result=Result.SKIP,
+                    modfile=Path(name).stem,
+                    result_msg=modignore.get("nocompile", {})[Path(name).stem],
+                )
+                for name, is_copied in copy_to_working_dir_log.items()
+                if not is_copied
+            }
         )
 
     return out
 
 
-def _simulator_run(
-    simulator,
-    configpath,
+def _single_run(
+    run_name,
+    config_files_dir,
     config_protocol_generator,
-    modignore,
+    run_config,
     working_dir,
     print_config,
 ):
-    """Run tests with a particular simulator
+    """Run tests with a particular run setup
 
     Args:
-        simulator (enum): simulator to be used
-        configpath (str): folder in which there are all the relevant config files
+        run_name (str): run setup to be used
+        config_files_dir (str): dir in which there are all the relevant config files
         config_protocol_generator (enum): policy for deciding inputs and protocols
             in case config is autogenerated
-        modignorepath (str): modignore.yaml file location
-        simulators (enum): simulators used for running the tests
+        run_config_path (str): run_config.yaml file location
         base_working_dir (str): working dir (it should be empty or non existant)
         print_config (bool): print config to yaml file
 
     Returns:
         out (dict): One RunResult for each protocol, mod file combination
     """
-    results = []
+    results = {}
     modpaths = glob.glob(os.path.join(working_dir, "mod", "*.mod"))
     for modpath in modpaths:
         name = Path(modpath).stem
-        if name not in modignore:
+        if name not in run_config:
             config = Config(
-                configpath, modpath, config_protocol_generator, print_config
+                config_files_dir, modpath, config_protocol_generator, print_config
             )
             sim = Simulation(
                 working_dir,
                 config,
             )
-            results.extend(sim.run_all_protocols(simulator))
+            results.update(sim.run_all_protocols(run_name))
         else:
-            results.append(
-                RunResult(
-                    result=Result.SKIP,
-                    modfile=name,
-                    result_msg=modignore[name],
-                )
+            modfile = run_config[name]
+            results[modfile] = RunResult(
+                result=Result.SKIP,
+                modfile=name,
+                result_msg=modfile,
             )
+
     return results
 
 
 def compare(
     results,
-    main_simulator=utils.Simulators.NEURON,
-    rtol=1e-5,
-    atol=1e-8,
+    main_run="neuron",
+    run_config_path="run_config.yaml",
     verbose=2,
     is_fail_on_error=True,
 ):
-    """Compare RunResult made by different simulators
+    """Compare RunResult made by different runs
 
     Comparisons based on numpy.assert_allclose (https://numpy.org/doc/stable/reference/generated/numpy.testing.assert_allclose.html)
 
@@ -214,6 +220,9 @@ def compare(
 
         trace name is composed as: <section_name>_<trace_name>[_in for inputs]
 
+    Note: we suppose that the main run has at least all the run results present
+    in the investigated run
+
     Example:
 
         CVF - SUCCESS - Ca_HVA, wiggle, max mse=1.0e-37
@@ -221,26 +230,40 @@ def compare(
 
     Args:
         results (dict): run results data.
-        main_simulator (enum): results from this simulator are the base for comparison.
-        rtol (float): relative tolerance for numpy.assert_allclose.
-        atol (float): absolute tolerance for numpy.assert_allclose.
+        main_run (enum): results from this run are the base for comparison.
+        run_config_path (str): we retrive tolerances specific for a particular run provided as dict: {run_name: (rtol, atol)}
         verbose (int): verbosity level
         is_fail_on_error (bool): stop program if comparison fail
     """
+
+    run_config_path = os.path.abspath(run_config_path)
+    with open(run_config_path, "r") as file:
+        global_run_config = yaml.load(file, Loader=yaml.FullLoader)
+
     logging.getLogger().setLevel(logging.INFO)
     is_error = False
 
+    if len(results) < 2:
+        logging.warning("Not enough runs to compare (<2).")
+        return
+
     remove_duplicate_log = set()
-    for simulator, tests in sorted(results.items()):
-        if simulator == main_simulator:
+    for run_name, tests in results.items():
+        if run_name == main_run:
             continue
 
-        logging.info("Compare {} with {}".format(main_simulator.name, simulator.name))
+        logging.info("")
+        logging.info("Compare {} with {}".format(main_run, run_name))
 
-        for base_res, test_res in zip(results[main_simulator], tests):
+        atol = float(global_run_config[run_name].get("atol", 1e-8))
+        rtol = float(global_run_config[run_name].get("rtol", 1e-5))
+        # for base_res, test_res in zip(results[main_run], tests):
+        for modfile, test_res in tests.items():
 
             if test_res.result is Result.SUCCESS:
-                key = base_res.modfile + base_res.protocol + simulator.name
+                base_res = results[main_run][modfile]
+
+                key = base_res.modfile + base_res.protocol + run_name
                 test_res.mse = [
                     utils.compute_mse(base_trace, test_res.traces[trace_name])
                     for trace_name, base_trace in base_res.traces.items()
@@ -273,11 +296,18 @@ def compare(
         logging.info("SUCCESS!")
 
 
-def plot(results):
+def plot(results, dir=None):
+    """Plot results wrapper to erase log10 warnings"""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _plot(results, dir)
+
+
+def _plot(results, dir=None):
     """Plot results
 
-    Plot results, one for each simulator, protocol, trace.
-    Color-grouped by simulator.
+    Plot results, one for each run_name, protocol, trace.
+    Color-grouped by run_name.
 
     2 additional cumulative plots of all the traces: linear and log10
 
@@ -285,9 +315,9 @@ def plot(results):
         results (dict): run results data.
     """
 
-    logging.getLogger().setLevel(logging.INFO)
-
-    def plot_switcher(ifig, t, v, col, label, is_spiketrain, is_log=False):
+    def plot_switcher(
+        ifig, t, v, col, label, is_spiketrain, is_log=False, figname=None
+    ):
         if len(v) == 0:
             return
 
@@ -311,19 +341,25 @@ def plot(results):
                 label=label,
             )
 
+        pplt.xlabel("t (msec)")
+        pplt.legend()
+        if figname:
+            pplt.savefig(figname)
+
+    logging.getLogger().setLevel(logging.INFO)
+    if dir:
+        utils.silent_remove([dir])
+        os.makedirs(dir)
+
     remove_duplicate_log = set()
 
     colit = cycle(dict(colors.BASE_COLORS))
 
     i_fig = 1
-    for (simulator, tests), col in zip(
-        sorted(results.items()), dict(colors.BASE_COLORS)
-    ):
+    for (run_name, tests), col in zip(results.items(), dict(colors.BASE_COLORS)):
         if len(results) > 1:
             col = next(colit)
-        for test in tests:
-            if test.result is not Result.SUCCESS:
-                continue
+        for test in tests.values():
 
             for trace_name, trace_vec in test.traces.items():
 
@@ -333,14 +369,22 @@ def plot(results):
                 is_spiketrain = "netcon" in trace_name
 
                 label = "{}, {}, {}, {}".format(
-                    test.modfile, test.protocol, test.simulator.name, trace_name
+                    test.modfile, test.protocol, test.run_name, trace_name
                 )
 
                 no_double_label = (label, "")[label in remove_duplicate_log]
                 remove_duplicate_log.add(label)
 
+                figname = (None, f"{dir}/fig_{i_fig}.png")[dir is not None]
+
                 plot_switcher(
-                    0, test.tvec, trace_vec, col, no_double_label, is_spiketrain
+                    0,
+                    test.tvec,
+                    trace_vec,
+                    col,
+                    no_double_label,
+                    is_spiketrain,
+                    figname=figname,
                 )
 
                 plot_switcher(
@@ -351,33 +395,46 @@ def plot(results):
                     no_double_label,
                     is_spiketrain,
                     is_log=True,
+                    figname=figname,
                 )
 
                 i_fig += 1
                 if i_fig > 20:
-                    logging.error("Too many figures! I strike!")
-                    return
+                    logging.warning("Too many figures! No visualization!")
+                    if not dir:
+                        return
 
-                plot_switcher(i_fig, test.tvec, trace_vec, col, label, is_spiketrain)
+                plot_switcher(
+                    i_fig,
+                    test.tvec,
+                    trace_vec,
+                    col,
+                    label,
+                    is_spiketrain,
+                    figname=figname,
+                )
 
         pplt.figure(0)
+        pplt.xlabel("t (msec)")
+        pplt.legend()
         pplt.title("cumulative")
+        if dir:
+            pplt.savefig(f"{dir}/fig_0.png")
         pplt.figure(1)
+        pplt.xlabel("t (msec)")
+        pplt.legend()
         pplt.title("cumulative")
         pplt.ylabel("log10(|y|)")
+        if dir:
+            pplt.savefig(f"{dir}/fig_1.png")
 
-        for i in range(0, i_fig + 1):
-            pplt.figure(i)
-
-            pplt.xlabel("t (msec)")
-            pplt.legend()
-
-    pplt.show()
+    if i_fig <= 20:
+        pplt.show()
 
 
 def get_conf(
-    configpath="config",
-    additional_mod_folders=[],
+    config_files_dir="config",
+    mod_dirs=["mod/cvf", "mod/local"],
     working_dir="tmp",
     protocol_generator=Config.ProtocolGenerator.SI_FIRST_PROTOCOL,
 ):
@@ -392,13 +449,13 @@ def get_conf(
         conf (config): config object.
     """
 
-    utils.init_working_dir(additional_mod_folders, working_dir)
+    utils.init_working_dir(mod_dirs, working_dir)
     modpaths = glob.glob(os.path.join(working_dir, "mod", "*.mod"))
 
     conf = []
     for modpath in modpaths:
         if modpath.find("cvf") == -1:
-            conf.append(Config(configpath, modpath, protocol_generator))
+            conf.append(Config(config_files_dir, modpath, protocol_generator))
 
     return conf
 
@@ -409,4 +466,4 @@ def cvf_print(results):
     Args:
         RunResult data
     """
-    print(yaml.dump(utils.yamlfy(results)))
+    print(yaml.dump(utils.yamlfy(results), Dumper=utils.NoAliasDumper))

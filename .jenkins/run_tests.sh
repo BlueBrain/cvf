@@ -5,7 +5,7 @@ set -ex
 module purge
 module load unstable
 
-module load neuron/develop coreneuron/develop nmodl/develop
+module load neuron/develop nmodl/develop
 module av
 module load python-dev
 
@@ -14,7 +14,7 @@ source $BUILD_HOME/venv/bin/activate
 
 python3 setup.py install
 
-cvf_stdrun config modignore.yaml mod/neocortex/mod/v5
-cvf_stdrun config modignore.yaml mod/hippocampus/mod
-cvf_stdrun config modignore.yaml mod/thalamus/mod
-cvf_stdrun config modignore.yaml mod/mousify/mod
+cvf_stdrun mod/cvf mod/neocortex/mod/v5
+cvf_stdrun mod/cvf mod/hippocampus/mod
+cvf_stdrun mod/cvf mod/thalamus/mod
+cvf_stdrun mod/cvf mod/mousify/mod

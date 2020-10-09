@@ -1,8 +1,0 @@
-nocompile:
-    netstim_inhpoisson: artificial cell not supported
-    VecStim: artificial cell not supported
-    GluSynapse: does not compile correctly
-    StochKv: setRNG for suffix not supported
-notest:
-    TTXDynamicsSwitch: service mechanism used in conjunction with others. Testing it alone is not meaningful
-    cvf_svclmp: reserved for cvf

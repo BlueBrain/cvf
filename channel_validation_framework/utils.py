@@ -2,21 +2,18 @@ import glob
 import logging
 import os
 import shutil
-from enum import IntEnum, auto
+from enum import Enum
 from pathlib import Path
 
 import numpy as np
+import yaml
 
 
 # do not import from neuron
 
-
-class Simulators(IntEnum):
-    NEURON = auto()
-    CORENEURON_NMODLSYMPY_ANALYTIC = auto()
-    CORENEURON_NMODLSYMPY_PADE = auto()
-    CORENEURON_NMODLSYMPY_CSE = auto()
-    CORENEURON_NMODLSYMPY_CONDUCTANCEC = auto()
+class NoAliasDumper(yaml.SafeDumper):
+    def ignore_aliases(self, data):
+        return True
 
 
 class NameGen:
@@ -33,6 +30,17 @@ class NameGen:
             return "{}_{}".format(name, self.stor[name] - 1)
 
 
+# def subprocessify(cmd):
+#     cmd_list = cmd.split('"')
+#     out = []
+#     for idx, token in enumerate(cmd_list):
+#         if idx % 2:
+#             out.append(token)
+#         else:
+#             out.extend(token.split())
+#     return out
+
+
 def nparray_yamlfy(vec):
     with np.printoptions(precision=3):
         return {"len": len(vec), "array": vec.__str__()}
@@ -44,7 +52,7 @@ def yamlfy(obj):
     if isinstance(obj, primitive_types):
         return obj
 
-    if isinstance(obj, Simulators):
+    if isinstance(obj, Enum):
         return obj.name
 
     if hasattr(obj, "yamlfy"):
@@ -55,7 +63,7 @@ def yamlfy(obj):
 
     if isinstance(obj, dict):
         return {
-            (k, k.name)[isinstance(k, Simulators)]: yamlfy(v) for k, v in obj.items()
+            (k.name if isinstance(k, Enum) else k): yamlfy(v) for k, v in obj.items()
         }
 
     attributes = [i for i in dir(obj) if not i.startswith("__")]
@@ -66,22 +74,18 @@ def yamlfy(obj):
     return out
 
 
-def init_working_dir(additional_mod_folders, working_dir, modignore={}):
+def init_working_dir(mod_dirs, working_dir, modignore={}):
 
-    if isinstance(additional_mod_folders, str):
-        additional_mod_folders = [additional_mod_folders]
+    if isinstance(mod_dirs, str):
+        mod_dirs = [mod_dirs]
+
+    rel_mod_dir = "mod"
 
     silent_remove([working_dir])
-    os.makedirs(os.path.join(working_dir, "mod"))
-
-    # we add the custom cvf mod files
-    if not additional_mod_folders:
-        additional_mod_folders.append(os.path.join("mod", "local"))
-
-    additional_mod_folders.append(os.path.join("mod", "cvf"))
+    os.makedirs(os.path.join(working_dir, rel_mod_dir))
 
     copy_to_working_dir_log = copy_to_working_dir(
-        additional_mod_folders, os.path.join(working_dir, "mod"), ".mod", modignore
+        mod_dirs, os.path.join(working_dir, rel_mod_dir), ".mod", modignore
     )
 
     logging.info(
@@ -97,7 +101,7 @@ def init_working_dir(additional_mod_folders, working_dir, modignore={}):
         "\n --- \n",
     )
 
-    return copy_to_working_dir_log
+    return copy_to_working_dir_log, rel_mod_dir
 
 
 def std_trace_name(name):
@@ -170,20 +174,24 @@ def normalize(mat, normalize_with_min):
     return mat
 
 
-def smart_merge(map, key, section):
-    if key not in map:
-        map[key] = section
-    elif isinstance(map[key], list):
-        if isinstance(map[key], list):
-            map[key].extend(section)
-        else:
-            map[key].append(section)
-    elif isinstance(map[key], dict):
-        if isinstance(map[key], dict):
-            for k, v in section.items():
-                smart_merge(map[key], k, v)
-        else:
-            smart_merge(map[key], "", section)
+def nonoverriding_merge(d_base, d_new):
+    if type(d_base) is not type(d_new):
+        raise TypeError(
+            "{} and {} are not the same type".format(type(d_base), type(d_new))
+        )
+
+    if isinstance(d_base, list):
+        d_base.extend(d_new)
+
+    if isinstance(d_base, set):
+        d_base.update(d_new)
+
+    if isinstance(d_base, dict):
+        for key, val in d_new.items():
+            if key not in d_base:
+                d_base[key] = val
+            else:
+                nonoverriding_merge(d_base[key], d_new[key])
 
 
 def compute_mse(a, b):

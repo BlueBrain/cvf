@@ -1,0 +1,61 @@
+modignore: # These are the mod dirs that are ignored for all the runs. You can also remove mod files from compilation or testing in each run setup
+    nocompile: # Not compiled
+        netstim_inhpoisson: artificial cell not supported
+        VecStim: artificial cell not supported
+        GluSynapse: does not compile correctly
+        StochKv: setRNG for suffix not supported
+    notest: # Not tested
+        TTXDynamicsSwitch: service mechanism used in conjunction with others. Testing it alone is not meaningful
+        cvf_svclmp: reserved for cvf
+
+neuron: #Base run. This name determines:
+        # - how the simulation is run (neuron/coreneuron)
+        # - on what we compare results.
+        #
+        # Do not change it unless you know what you are doing.
+    compile_commands:
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
+
+coreneuron-mod2c:
+    compile_commands:
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop~nmodl)/bin/nrnivmodl-core mod/
+    modignore:
+        nocompile:
+            NaV: sparse solver not implemented with this simulator
+    rtol: 0.0
+    atol: 0.0
+
+coreneuron-nmodl:
+    compile_commands:
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop+nmodl~ispc)/bin/nrnivmodl-core -a "host --c passes --inline codegen --force" mod/
+    modignore:
+        nocompile:
+            cagk: Small discrepancy with neuron reported in nmodl issue \#432. Reenable this once it is solved
+            NaV: sparse solver not implemented with this simulator
+    rtol: 0.0
+    atol: 0.0
+
+coreneuron-nmodl-ispc-fullsympy:
+    compile_commands:
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop+nmodl+ispc)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance" mod/
+    modignore:
+        nocompile:
+            NaV: sparse solver not implemented with this simulator
+            cagk: bug with ispc constants \#433. Reenable this once it is solved
+    rtol: 1e-8
+    atol: 1e-5
+
+coreneuron-nmodl-ispc-fullsympy-pade:
+    compile_commands:
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop+nmodl+ispc)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance --pade" mod/
+    modignore:
+        nocompile:
+            NaV: sparse solver not implemented with this simulator
+            cagk: bug with ispc constants \#433. Reenable this once it is solved
+    rtol: 0.01
+    atol: 1e-4
+

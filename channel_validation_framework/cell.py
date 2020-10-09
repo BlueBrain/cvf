@@ -1,6 +1,6 @@
 import logging
 
-from neuron import h, gui
+from neuron import h
 
 from . import utils
 
@@ -60,11 +60,12 @@ class Cell:
                 TwaveForm, VwaveForm = utils.get_step_wave_form(
                     steps["t_steps"], steps["y_steps"], h.dt
                 )
+
                 input_traces = [h.Vector(TwaveForm), h.Vector(VwaveForm)]
                 logging.info("SET INPUT {}".format(var))
 
                 if var == "v":
-                    s = h.cvf_svclamp(self.section(0.5))
+                    s = h.SEClamp(self.section(0.5))
                     s.rs = 0.001
                     s.dur1 = h.tstop
 

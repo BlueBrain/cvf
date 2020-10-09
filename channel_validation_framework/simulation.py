@@ -23,18 +23,17 @@ class Simulation:
         self.working_dir = working_dir
         self.conf = config
 
-    def run_all_protocols(self, simulator):
-        results = []
+    def run_all_protocols(self, run_name):
+        results = {}
 
         for protocol in self.conf:
-            results.append(
-                self.run(
-                    RunResult(
-                        modfile=Path(self.conf.mod.modpath).stem,
-                        protocol=protocol,
-                        simulator=simulator,
-                        traces={},
-                    )
+            modfile = Path(self.conf.mod.modpath).stem
+            results[modfile + "/" + protocol] = self.run(
+                RunResult(
+                    modfile=modfile,
+                    protocol=protocol,
+                    run_name=run_name,
+                    traces={},
                 )
             )
 
@@ -71,10 +70,12 @@ class Simulation:
     def _worker_run(self, result, queue):
         logging.info(f"Run simulation: {result.modfile}")
 
-        self._load_libs(result.simulator)
+        self._load_libs()
 
         h.tstop = self.conf.tstop(result.protocol)
         logging.info(f"tstop: {h.tstop}")
+
+        logging.info(f"Legacy units: {h.nrnunit_use_legacy()}")
         h.cvode.use_fast_imem(1)
         h.cvode.cache_efficient(1)
 
@@ -85,7 +86,7 @@ class Simulation:
         # run simulation
         logging.info("stdinit")
         h.stdinit()
-        if result.simulator == utils.Simulators.NEURON:
+        if result.run_name == "neuron":
             h.v_init = self.conf[result.protocol]["global"]["data"]["v_init"]
             logging.info("run NEURON")
             h.run()
@@ -106,7 +107,7 @@ class Simulation:
             except Full:
                 continue
 
-    def _load_libs(self, simulator):
+    def _load_libs(self):
 
         try:
             nrn_lib = os.path.abspath(
@@ -116,16 +117,15 @@ class Simulation:
             raise SimulationError("nrn_lib not found!") from e
         h.nrn_load_dll(nrn_lib)
 
-        if simulator is not utils.Simulators.NEURON:
-            try:
-                corenrn_lib = os.path.abspath(
-                    glob.glob(
-                        os.path.join(self.working_dir, "x86_64", "libcorenrnmech.*")
-                    )[0]
-                )
-            except IndexError as e:
-                raise SimulationError("corenrn_lib not found!") from e
+        try:
+            corenrn_lib = os.path.abspath(
+                glob.glob(os.path.join(self.working_dir, "x86_64", "libcorenrnmech.*"))[
+                    0
+                ]
+            )
             os.environ["CORENEURONLIB"] = corenrn_lib
+        except IndexError as e:
+            pass
 
     def _init_simulator(self, result):
         protocol = self.conf[result.protocol]
