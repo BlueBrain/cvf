@@ -16,3 +16,4 @@ build
 tmp*
 debug
 mod/local
+config/*_autogen.yaml

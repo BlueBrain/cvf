@@ -42,8 +42,8 @@ check_patch_project nmodl "$NMODL_BRANCH"
 module load unstable python-dev
 
 spack install coreneuron@develop~mpi~report ^bison@3.4.2
-spack install coreneuron@develop+nmodl~mpi~report ^nmodl@develop ^bison@3.4.2
-spack install coreneuron@develop+nmodl+ispc~mpi~report ^nmodl@develop ^bison@3.4.2
+spack install coreneuron@develop+nmodl~mpi~report ^nmodl@develop+python ^bison@3.4.2
+spack install coreneuron@develop+nmodl+ispc~mpi~report ^nmodl@develop+python ^bison@3.4.2
 
 source $SPACK_ROOT/share/spack/setup-env.sh
 module av
