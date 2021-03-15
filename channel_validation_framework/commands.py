@@ -54,18 +54,27 @@ def cvf_stdrun():
         help="Location of the run_config.yaml file.",
     )
     parser.add_argument(
+        "-d",
+        "--working_dir",
+        default="tmp",
+        type=str,
+        help="Location where the program is going to generate results and files.",
+    )
+    parser.add_argument(
         "mod_dirs",
         nargs="*",
         default=["mod/cvf", "mod/local"],
         type=str,
         help="Mod dirs that are to be processed (non-recursive).",
     )
+
     args = parser.parse_args()
 
     results = run(
         config_files_dir=args.config,
         mod_dirs=args.mod_dirs,
         run_config_path=args.run_config,
+        base_working_dir=args.working_dir
     )
 
     compare(results)
@@ -99,7 +108,7 @@ def run(
 
     # clear the state
     if clear_working_dir:
-        utils.silent_remove([base_working_dir + "_*"])
+        utils.silent_remove([base_working_dir])
 
     config_files_dir = os.path.abspath(config_files_dir)
 
@@ -119,7 +128,7 @@ def run(
         utils.nonoverriding_merge(modignore, run_config.get("modignore", {}))
 
         # prepare working dir
-        working_dir = "{}_{}".format(base_working_dir, run_name)
+        working_dir = "{}/{}".format(base_working_dir, run_name)
         copy_to_working_dir_log = {}
         if clear_working_dir:
             copy_to_working_dir_log, _ = utils.init_working_dir(

@@ -8,7 +8,6 @@ sed_apply() (
     grep 'version(' "$f"
 )
 
-
 projname="$1"
 branch="$2"
 if [ "$branch" ]; then
@@ -18,4 +17,3 @@ if [ "$branch" ]; then
     sedexp="$sedexp; s#branch=[^,)]*)#branch='${branch}', preferred=True)#g"
     sed_apply "$pkg_file" "$sedexp"
 fi
-

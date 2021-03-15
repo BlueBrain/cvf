@@ -1,0 +1,116 @@
+variables:
+  SPACK_BRANCH: "develop"
+  # example: NEURON_REF: branch="name/of/branch"
+  # more info in hpc/gitlab-pipelines
+  NEURON_REF: ""
+  CORENEURON_REF: ""
+  NMODL_REF: ""
+
+
+include:
+  - project: hpc/gitlab-pipelines
+    file: spack-build-components.gitlab-ci.yml
+
+stages:
+  - .pre
+  - build
+  - build_2
+  - test
+
+spack_setup:
+  stage:
+    .pre
+  extends: .spack_setup_ccache
+
+venv:
+  tags:
+    - bb5
+  stage:
+    build
+  variables:
+    GIT_STRATEGY: clone
+    GIT_SUBMODULE_STRATEGY: recursive
+    GIT_CLONE_PATH: ${CI_BUILDS_DIR}/${CI_PROJECT_PATH}
+  script:
+    - module load unstable git python-dev
+    - python -m venv venv
+    - source venv/bin/activate
+    - python setup.py install
+
+nmodl:
+  stage:
+    build
+  extends:
+    .spack_build
+  variables:
+    SPACK_PACKAGE: nmodl
+    SPACK_PACKAGE_REF: ${NMODL_REF}
+    SPACK_PACKAGE_SPEC: +python
+
+neuron:
+  stage:
+    build
+  extends:
+    .spack_build
+  variables:
+    SPACK_PACKAGE: neuron
+    SPACK_PACKAGE_REF: ${NEURON_REF}
+
+coreneuron:
+  stage:
+    build
+  extends:
+    .spack_build
+  variables:
+    SPACK_PACKAGE: coreneuron
+    SPACK_PACKAGE_REF: ${CORENEURON_REF}
+    SPACK_PACKAGE_SPEC: ~report
+
+coreneuron_nmodl:
+  stage:
+    build_2
+  extends:
+    .spack_build
+  variables:
+    SPACK_PACKAGE: coreneuron
+    SPACK_PACKAGE_REF: ${CORENEURON_REF}
+    SPACK_PACKAGE_SPEC: +nmodl~report
+  needs: ["nmodl"]
+  
+coreneuron_nmodl_ispc:
+  stage:
+    build_2
+  extends:
+    .spack_build
+  variables:
+    SPACK_PACKAGE: coreneuron
+    SPACK_PACKAGE_REF: ${CORENEURON_REF}
+    SPACK_PACKAGE_SPEC: +nmodl+ispc~report
+  needs: ["nmodl"]
+
+test:
+  variables:
+    CVF_TEST_WORKING_DIR: test/${MOD_FILES_PROJECT}
+    CVF_TEST_CLONING_DIR: ${CVF_TEST_WORKING_DIR}/${MOD_FILES_PROJECT}
+#    work in the project path
+    GIT_CLONE_PATH: ${CI_BUILDS_DIR}/${CI_PROJECT_PATH}
+  extends:
+    - .spack_test
+  script:
+    - unset $(env|awk -F= '/^(PMI|SLURM)_/ {if (match($1, "_(ACCOUNT|PARTITION)$")==0) print $1}')
+    - module load unstable git python-dev
+    - spack load nmodl@develop neuron@develop
+    - source venv/bin/activate
+    - git clone --recursive --depth 1 ssh://bbpcode.epfl.ch/sim/models/${MOD_FILES_PROJECT} ${CVF_TEST_CLONING_DIR}
+    - cvf_stdrun -d ${CVF_TEST_WORKING_DIR} mod/cvf ${CVF_TEST_CLONING_DIR}/${MOD_FOLDER}
+  parallel:
+    matrix:
+      - MOD_FILES_PROJECT: hippocampus
+        MOD_FOLDER: mod
+      - MOD_FILES_PROJECT: mousify
+        MOD_FOLDER: mod
+      - MOD_FILES_PROJECT: neocortex
+        MOD_FOLDER: mod/v5
+      - MOD_FILES_PROJECT: thalamus
+        MOD_FOLDER: mod
+  needs: ["venv", "nmodl", "neuron", "coreneuron", "coreneuron_nmodl", "coreneuron_nmodl_ispc"]
