@@ -18,6 +18,8 @@ stages:
   - test
 
 spack_setup:
+  tags:
+    - bb5
   stage:
     .pre
   extends: .spack_setup_ccache
@@ -38,6 +40,8 @@ venv:
     - python setup.py install
 
 nmodl:
+  tags:
+    - bb5
   stage:
     build
   extends:
@@ -48,6 +52,8 @@ nmodl:
     SPACK_PACKAGE_SPEC: +python
 
 neuron:
+  tags:
+    - bb5
   stage:
     build
   extends:
@@ -57,6 +63,8 @@ neuron:
     SPACK_PACKAGE_REF: ${NEURON_REF}
 
 coreneuron:
+  tags:
+    - bb5
   stage:
     build
   extends:
@@ -67,6 +75,8 @@ coreneuron:
     SPACK_PACKAGE_SPEC: ~report
 
 coreneuron_nmodl:
+  tags:
+    - bb5
   stage:
     build_2
   extends:
@@ -78,6 +88,8 @@ coreneuron_nmodl:
   needs: ["nmodl"]
   
 coreneuron_nmodl_ispc:
+  tags:
+    - bb5
   stage:
     build_2
   extends:
@@ -89,6 +101,8 @@ coreneuron_nmodl_ispc:
   needs: ["nmodl"]
 
 test:
+  tags:
+    - bb5
   variables:
     CVF_TEST_WORKING_DIR: test/${MOD_FILES_PROJECT}
     CVF_TEST_CLONING_DIR: ${CVF_TEST_WORKING_DIR}/${MOD_FILES_PROJECT}
