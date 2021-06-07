@@ -30,6 +30,9 @@ venv:
   stage:
     build
   variables:
+    # Make ${CI_BUILDS_DIR} point to a top-level pipeline-global directory,
+    # like the other jobs that are based on gitlab-pipelines templates.
+    bb5_build_dir: pipeline
     GIT_STRATEGY: clone
     GIT_SUBMODULE_STRATEGY: recursive
     GIT_CLONE_PATH: ${CI_BUILDS_DIR}/${CI_PROJECT_PATH}
