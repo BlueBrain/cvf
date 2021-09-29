@@ -118,6 +118,7 @@ test:
     - module load unstable git python-dev
     - spack load nmodl@develop neuron@develop
     - source venv/bin/activate
+    - rm -rf ./${CVF_TEST_CLONING_DIR}
     - git clone --recursive --depth 1 ssh://bbpcode.epfl.ch/sim/models/${MOD_FILES_PROJECT} ${CVF_TEST_CLONING_DIR}
     - cvf_stdrun -d ${CVF_TEST_WORKING_DIR} mod/cvf ${CVF_TEST_CLONING_DIR}/${MOD_FOLDER}
   parallel:
