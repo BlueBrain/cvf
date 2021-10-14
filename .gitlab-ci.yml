@@ -109,6 +109,7 @@ test:
   variables:
     CVF_TEST_WORKING_DIR: test/${MOD_FILES_PROJECT}
     CVF_TEST_CLONING_DIR: ${CVF_TEST_WORKING_DIR}/${MOD_FILES_PROJECT}
+    bb5_build_dir: pipeline
 #    work in the project path
     GIT_CLONE_PATH: ${CI_BUILDS_DIR}/${CI_PROJECT_PATH}
   extends:
