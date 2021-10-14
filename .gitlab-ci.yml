@@ -11,42 +11,32 @@ include:
   - project: hpc/gitlab-pipelines
     file: spack-build-components.gitlab-ci.yml
 
-stages:
-  - .pre
-  - build
-  - build_2
-  - test
-
 spack_setup:
   tags:
     - bb5
-  stage:
-    .pre
   extends: .spack_setup_ccache
 
 venv:
   tags:
     - bb5
-  stage:
-    build
   variables:
-    # Make ${CI_BUILDS_DIR} point to a top-level pipeline-global directory,
-    # like the other jobs that are based on gitlab-pipelines templates.
-    bb5_build_dir: pipeline
     GIT_STRATEGY: clone
     GIT_SUBMODULE_STRATEGY: recursive
-    GIT_CLONE_PATH: ${CI_BUILDS_DIR}/${CI_PROJECT_PATH}
   script:
     - module load unstable git python-dev
     - python -m venv venv
     - source venv/bin/activate
     - python setup.py install
+    - echo "CVF_VENV_ROOT=${PWD}" > venv_location.env
+  artifacts:
+    when: always
+    paths: [venv_location.env]
+    reports:
+      dotenv: venv_location.env
 
 nmodl:
   tags:
     - bb5
-  stage:
-    build
   extends:
     .spack_build
   variables:
@@ -57,8 +47,6 @@ nmodl:
 neuron:
   tags:
     - bb5
-  stage:
-    build
   extends:
     .spack_build
   variables:
@@ -68,8 +56,6 @@ neuron:
 coreneuron:
   tags:
     - bb5
-  stage:
-    build
   extends:
     .spack_build
   variables:
@@ -80,28 +66,24 @@ coreneuron:
 coreneuron_nmodl:
   tags:
     - bb5
-  stage:
-    build_2
   extends:
     .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
     SPACK_PACKAGE_REF: ${CORENEURON_REF}
     SPACK_PACKAGE_SPEC: +nmodl~report
-  needs: ["nmodl"]
+  needs: [nmodl]
   
 coreneuron_nmodl_ispc:
   tags:
     - bb5
-  stage:
-    build_2
   extends:
     .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
     SPACK_PACKAGE_REF: ${CORENEURON_REF}
     SPACK_PACKAGE_SPEC: +nmodl+ispc~report
-  needs: ["nmodl"]
+  needs: [nmodl]
 
 test:
   tags:
@@ -109,13 +91,11 @@ test:
   variables:
     CVF_TEST_WORKING_DIR: test/${MOD_FILES_PROJECT}
     CVF_TEST_CLONING_DIR: ${CVF_TEST_WORKING_DIR}/${MOD_FILES_PROJECT}
-    bb5_build_dir: pipeline
-#    work in the project path
-    GIT_CLONE_PATH: ${CI_BUILDS_DIR}/${CI_PROJECT_PATH}
   extends:
     - .spack_test
   script:
-    - unset $(env|awk -F= '/^(PMI|SLURM)_/ {if (match($1, "_(ACCOUNT|PARTITION)$")==0) print $1}')
+    # Change to the working directory of the `venv` job
+    - cd ${CVF_VENV_ROOT}
     - module load unstable git python-dev
     - spack load nmodl@develop neuron@develop
     - source venv/bin/activate
@@ -132,4 +112,9 @@ test:
         MOD_FOLDER: mod/v5
       - MOD_FILES_PROJECT: thalamus
         MOD_FOLDER: mod
-  needs: ["venv", "nmodl", "neuron", "coreneuron", "coreneuron_nmodl", "coreneuron_nmodl_ispc"]
+  needs:
+    - venv
+    - neuron
+    - coreneuron
+    - coreneuron_nmodl
+    - coreneuron_nmodl_ispc
