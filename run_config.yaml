@@ -14,12 +14,12 @@ neuron: #Base run. This name determines:
         #
         # Do not change it unless you know what you are doing.
     compile_commands:
-        - $(spack location -i neuron@develop~mpi)/bin/nrnivmodl mod/
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
 
 coreneuron-mod2c:
     compile_commands:
-        - $(spack location -i neuron@develop~mpi)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop~mpi~report~nmodl)/bin/nrnivmodl-core mod/
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop~nmodl)/bin/nrnivmodl-core mod/
     modignore:
         nocompile:
             NaV: sparse solver not supported with mod2c
@@ -28,22 +28,22 @@ coreneuron-mod2c:
 
 coreneuron-nmodl:
     compile_commands:
-        - $(spack location -i neuron@develop~mpi)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop+nmodl~mpi~report)/bin/nrnivmodl-core -a "host --c passes --inline codegen --force" mod/
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop+nmodl~ispc)/bin/nrnivmodl-core -a "host --c passes --inline codegen --force" mod/
     rtol: 0.0
     atol: 0.0
 
 coreneuron-nmodl-ispc-fullsympy:
     compile_commands:
-        - $(spack location -i neuron@develop~mpi)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop+nmodl+ispc~mpi~report)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance" mod/
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop+nmodl+ispc)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance" mod/
     rtol: 1e-8
     atol: 1e-5
 
 coreneuron-nmodl-ispc-fullsympy-pade:
     compile_commands:
-        - $(spack location -i neuron@develop~mpi)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop+nmodl+ispc~mpi~report)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance --pade" mod/
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop+nmodl+ispc)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance --pade" mod/
     rtol: 0.01
     atol: 1e-4
 
