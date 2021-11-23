@@ -96,9 +96,6 @@ test:
         MOD_FOLDER: mod/v5
       - MOD_FILES_PROJECT: thalamus
         MOD_FOLDER: mod
-  artifacts:
-    paths:
-      - ${CVF_TEST_WORKING_DIR}/*.pdf
   needs:
     - venv
     - neuron
