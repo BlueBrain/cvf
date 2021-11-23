@@ -23,22 +23,22 @@ In order to use CVF you need the various neuron and coreneurons that you are goi
 ```bash
 spack install neuron@develop~mpi
 spack install coreneuron@develop~mpi~report ^bison@3.4.2
-spack install coreneuron@develop+nmodl~mpi~report ^nmodl@develop ^bison@3.4.2
-spack install coreneuron@develop+nmodl+ispc~mpi~report ^nmodl@develop ^bison@3.4.2
+spack install coreneuron@develop+nmodl~mpi~report ^nmodl@develop+python ^bison@3.4.2
+spack install coreneuron@develop+nmodl+ispc~mpi~report ^nmodl@develop+python ^bison@3.4.2
 ```
 
 ### How to run CVF
 
 CVF can be run in 2 ways:
 - Install cvf and run cvf_stdrun to do a standard check
-    - Load libraries `module load neuron/develop nmodl/develop`
+    - Load libraries `module load neuron/develop nmodl/develop` and make sure that they are the same as the packages installed through spack from above
     - Create a python virtual env `python -m venv venv`
     - Activate it `source venv/bin/activate`
     - Install cvf `python3 setup.py install`
-    - Call the standard run `cvf_stdrun`
+    - Call the standard run `cvf_stdrun`. You can also provide a working directory with `-d <WORKING_DIR>` where the special is going to be installed and then the folders with the mod files you want to check with `<MODFILE_FOLDER>`.
 
 - SUGGESTED:
-    - Load the libraries `module load neuron/develop nmodl/develop`
+    - Load the libraries `module load neuron/develop nmodl/develop` and make sure that they are the same as the packages installed through spack from above
     - Add your mod files in `mod/local`
     - Modify `run_config.yaml` to set up the various run configurations
     - Run your own python script (check `example.py` for inspirations). The functions exposed to public (in `channel
