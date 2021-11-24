@@ -99,7 +99,7 @@ test:
   artifacts:
     when: on_failure
     paths:
-      - ${CVF_TEST_WORKING_DIR}/*.pdf
+      - ${CVF_VENV_ROOT}/${CVF_TEST_WORKING_DIR}/*.pdf
   needs:
     - venv
     - neuron
