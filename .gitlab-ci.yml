@@ -97,6 +97,7 @@ test:
       - MOD_FILES_PROJECT: thalamus
         MOD_FOLDER: mod
   artifacts:
+    when: on_failure
     paths:
       - ${CVF_TEST_WORKING_DIR}/*.pdf
   needs:
