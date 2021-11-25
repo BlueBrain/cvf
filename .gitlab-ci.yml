@@ -86,6 +86,7 @@ test:
     - spack load nmodl@develop neuron@develop
     - source venv/bin/activate
     - cvf_stdrun -d test/${MOD_FILES_PROJECT} ${CVF_MODELS_ROOT}/${MOD_FILES_PROJECT}/${MOD_FOLDER}
+    - cp test/${MOD_FILES_PROJECT}/*.pdf ${CI_PROJECT_DIR}/${MOD_FILES_PROJECT}
   parallel:
     matrix:
       - MOD_FILES_PROJECT: hippocampus
@@ -99,7 +100,7 @@ test:
   artifacts:
     when: on_failure
     paths:
-      - ${CVF_VENV_ROOT}/${CVF_TEST_WORKING_DIR}/*.pdf
+      - ${CI_PROJECT_DIR}/${MOD_FILES_PROJECT}/*.pdf
   needs:
     - venv
     - neuron
