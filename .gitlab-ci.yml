@@ -85,11 +85,7 @@ test:
     - module load unstable git python-dev
     - spack load nmodl@develop neuron@develop
     - source venv/bin/activate
-    - cvf_stdrun -d test/${MOD_FILES_PROJECT} ${CVF_MODELS_ROOT}/${MOD_FILES_PROJECT}/${MOD_FOLDER}
-    - ls test/${MOD_FILES_PROJECT}
-    - cp test/${MOD_FILES_PROJECT}/*.pdf ${CI_PROJECT_DIR}/${MOD_FILES_PROJECT}
-    - echo "CI_PROJECT_DIR/MOD_FILES_PROJECT = ${CI_PROJECT_DIR}/${MOD_FILES_PROJECT}"
-    - ls ${CI_PROJECT_DIR}/${MOD_FILES_PROJECT}
+    - cvf_stdrun -d test/${MOD_FILES_PROJECT} ${CVF_MODELS_ROOT}/${MOD_FILES_PROJECT}/${MOD_FOLDER} || cp test/${MOD_FILES_PROJECT}/*.pdf ${CI_PROJECT_DIR}/${MOD_FILES_PROJECT} && exit 1
   parallel:
     matrix:
       - MOD_FILES_PROJECT: hippocampus
