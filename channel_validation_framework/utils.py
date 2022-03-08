@@ -101,6 +101,9 @@ def init_working_dir(mod_dirs, working_dir, modignore={}):
         "\n --- \n",
     )
 
+    if len(copy_to_working_dir_log) == 0:
+        raise Exception("Did not copy any files, which seems surprising.")
+
     return copy_to_working_dir_log, rel_mod_dir
 
 

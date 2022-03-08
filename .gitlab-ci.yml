@@ -1,24 +1,29 @@
 variables:
-  SPACK_BRANCH: "develop"
-  # example: NEURON_REF: branch="name/of/branch"
-  # more info in hpc/gitlab-pipelines
-  NEURON_REF: ""
-  CORENEURON_REF: ""
-  NMODL_REF: ""
-
+  CORENEURON_BRANCH:
+    description: Branch of CoreNEURON to build (CORENEURON_COMMIT and CORENEURON_TAG also possible)
+    value: master
+  NEURON_BRANCH:
+    description: Branch of NEURON to build (NEURON_COMMIT and NEURON_TAG also possible)
+    value: master
+  NMODL_BRANCH:
+    description: Branch of NMODL to build (NMODL_COMMIT and NMODL_TAG also possible)
+    value: master
+  SPACK_BRANCH:
+    description: Branch of BlueBrain Spack to use for the CI pipeline.
+    value: develop
+  SPACK_DEPLOYMENT_SUFFIX:
+    description: Extra path component used when finding deployed software. Set to something like `pulls/1497` use software built for https://github.com/BlueBrain/spack/pull/1497. You probably want to set SPACK_BRANCH to the branch used in the relevant PR if you set this.
+    value: ''
 
 include:
   - project: hpc/gitlab-pipelines
     file: spack-build-components.gitlab-ci.yml
 
 spack_setup:
-  tags:
-    - bb5
   extends: .spack_setup_ccache
 
 venv:
-  tags:
-    - bb5
+  tags: [bb5_map]
   variables:
     GIT_STRATEGY: clone
     GIT_SUBMODULE_STRATEGY: recursive
@@ -28,6 +33,12 @@ venv:
     - source venv/bin/activate
     - python setup.py install
     - echo "CVF_VENV_ROOT=${PWD}" > venv_location.env
+    - CVF_MODELS_ROOT=${PWD}/clone
+    - echo "CVF_MODELS_ROOT=${CVF_MODELS_ROOT}" >> venv_location.env
+    # In case we need to retry the venv/ job on GitLab
+    - rm -rf "${CVF_MODELS_ROOT}"
+    # This clones all of the BBP models and common MOD files in one go.
+    - git clone --recursive --depth 1 https://gitlab-ci-token:${CI_JOB_TOKEN}@bbpgitlab.epfl.ch/hpc/sim/neurodamus-models.git "${CVF_MODELS_ROOT}"
   artifacts:
     when: always
     paths: [venv_location.env]
@@ -35,73 +46,45 @@ venv:
       dotenv: venv_location.env
 
 nmodl:
-  tags:
-    - bb5
-  extends:
-    .spack_build
+  extends: .spack_build
   variables:
     SPACK_PACKAGE: nmodl
-    SPACK_PACKAGE_REF: ${NMODL_REF}
     SPACK_PACKAGE_SPEC: +python
 
 neuron:
-  tags:
-    - bb5
-  extends:
-    .spack_build
+  extends: .spack_build
   variables:
     SPACK_PACKAGE: neuron
-    SPACK_PACKAGE_REF: ${NEURON_REF}
 
 coreneuron:
-  tags:
-    - bb5
-  extends:
-    .spack_build
+  extends: .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
-    SPACK_PACKAGE_REF: ${CORENEURON_REF}
     SPACK_PACKAGE_SPEC: ~report
 
 coreneuron_nmodl:
-  tags:
-    - bb5
-  extends:
-    .spack_build
+  extends: .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
-    SPACK_PACKAGE_REF: ${CORENEURON_REF}
     SPACK_PACKAGE_SPEC: +nmodl~report
   needs: [nmodl]
   
 coreneuron_nmodl_ispc:
-  tags:
-    - bb5
-  extends:
-    .spack_build
+  extends: .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
-    SPACK_PACKAGE_REF: ${CORENEURON_REF}
     SPACK_PACKAGE_SPEC: +nmodl+ispc~report
   needs: [nmodl]
 
 test:
-  tags:
-    - bb5
-  variables:
-    CVF_TEST_WORKING_DIR: test/${MOD_FILES_PROJECT}
-    CVF_TEST_CLONING_DIR: ${CVF_TEST_WORKING_DIR}/${MOD_FILES_PROJECT}
-  extends:
-    - .spack_test
+  extends: .spack_test
   script:
     # Change to the working directory of the `venv` job
     - cd ${CVF_VENV_ROOT}
     - module load unstable git python-dev
     - spack load nmodl@develop neuron@develop
     - source venv/bin/activate
-    - rm -rf ./${CVF_TEST_CLONING_DIR}
-    - git clone --recursive --depth 1 ssh://bbpcode.epfl.ch/sim/models/${MOD_FILES_PROJECT} ${CVF_TEST_CLONING_DIR}
-    - cvf_stdrun -d ${CVF_TEST_WORKING_DIR} mod/cvf ${CVF_TEST_CLONING_DIR}/${MOD_FOLDER}
+    - cvf_stdrun -d test/${MOD_FILES_PROJECT} ${CVF_MODELS_ROOT}/${MOD_FILES_PROJECT}/${MOD_FOLDER}
   parallel:
     matrix:
       - MOD_FILES_PROJECT: hippocampus
