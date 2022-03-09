@@ -21,7 +21,7 @@ setup(
     url="https://bbpteam.epfl.ch/documentation/projects/channel-validation-framework",
     project_urls={
         "Tracker": "https://bbpteam.epfl.ch/project/issues/projects/HPCTM/issues",
-        "Source": "ssh://bbpcode.epfl.ch/sim/channel-validation-framework",
+        "Source": "ssh://git@bbpgitlab.epfl.ch/hpc/cvf.git",
     },
     license="BBP-internal-confidential",
     packages=find_packages(),
