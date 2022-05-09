@@ -23,8 +23,8 @@ coreneuron-mod2c:
     modignore:
         nocompile:
             NaV: sparse solver not supported with mod2c
-    rtol: 0.0
-    atol: 0.0
+    rtol: 1e-14
+    atol: 1e-18
 
 coreneuron-nmodl:
     compile_commands:
