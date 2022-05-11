@@ -55,25 +55,26 @@ neuron:
   extends: .spack_build
   variables:
     SPACK_PACKAGE: neuron
+    SPACK_PACKAGE_SPEC: build_type=Debug
 
 coreneuron:
   extends: .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
-    SPACK_PACKAGE_SPEC: ~report
+    SPACK_PACKAGE_SPEC: ~report build_type=Debug
 
 coreneuron_nmodl:
   extends: .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
-    SPACK_PACKAGE_SPEC: +nmodl~report
+    SPACK_PACKAGE_SPEC: +nmodl~report build_type=Debug
   needs: [nmodl]
   
 coreneuron_nmodl_ispc:
   extends: .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
-    SPACK_PACKAGE_SPEC: +nmodl+ispc~report
+    SPACK_PACKAGE_SPEC: +nmodl+ispc~report build_type=Debug
   needs: [nmodl]
 
 test:
