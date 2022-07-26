@@ -77,7 +77,7 @@ def cvf_stdrun():
         base_working_dir=args.working_dir
     )
 
-    compare(results)
+    compare(results, output_dir=args.working_dir)
 
     return 0
 
@@ -217,6 +217,7 @@ def compare(
     run_config_path="run_config.yaml",
     verbose=2,
     is_fail_on_error=True,
+    output_dir="tmp"
 ):
     """Compare RunResult made by different runs
 
@@ -243,6 +244,7 @@ def compare(
         run_config_path (str): we retrive tolerances specific for a particular run provided as dict: {run_name: (rtol, atol)}
         verbose (int): verbosity level
         is_fail_on_error (bool): stop program if comparison fail
+        output_dir (str): dir where to save the comparison graphs
     """
 
     run_config_path = os.path.abspath(run_config_path)
@@ -268,7 +270,6 @@ def compare(
         rtol = float(global_run_config[run_name].get("rtol", 1e-5))
         # for base_res, test_res in zip(results[main_run], tests):
         for modfile, test_res in tests.items():
-
             if test_res.result is Result.SUCCESS:
                 base_res = results[main_run][modfile]
 
@@ -283,6 +284,15 @@ def compare(
                         test_trace = test_res.traces[trace_name]
                         np.testing.assert_allclose(base_trace, test_trace, rtol, atol)
                 except AssertionError as e:
+                    from matplotlib import pyplot as plt
+                    plt.title("{} {} {} {} vs NEURON".format(base_res.modfile, base_res.protocol, run_name, trace_name))
+                    plt.plot(test_res.tvec, test_trace, label=run_name)
+                    plt.plot(test_res.tvec, base_trace, label="NEURON")
+                    plt.xlabel("Time (s)")
+                    plt.ylabel("Scale")
+                    plt.legend()
+                    plt.savefig("{}/{}_{}_{}_{}.pdf".format(output_dir, base_res.modfile, base_res.protocol, run_name, trace_name))
+                    plt.clf()
                     test_res.result = Result.FAIL
                     test_res.result_msg = str(e)
                     is_error = True
