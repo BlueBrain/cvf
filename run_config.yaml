@@ -18,8 +18,8 @@ neuron: #Base run. This name determines:
 
 coreneuron-mod2c:
     compile_commands:
-        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop~nmodl)/bin/nrnivmodl-core mod/
+        - $(spack location -i neuron@develop%intel)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop~nmodl%intel)/bin/nrnivmodl-core mod/
     modignore:
         nocompile:
             NaV: sparse solver not supported with mod2c
@@ -28,8 +28,8 @@ coreneuron-mod2c:
 
 coreneuron-nmodl:
     compile_commands:
-        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop+nmodl~ispc)/bin/nrnivmodl-core -a "host --c passes --inline codegen --force" mod/
+        - $(spack location -i neuron@develop%intel)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop+nmodl~ispc%intel)/bin/nrnivmodl-core -a "host --c passes --inline codegen --force" mod/
     modignore:
         nocompile:
             cagk: Small discrepancy with neuron reported in nmodl issue \#432. Reenable this once it is solved
@@ -40,8 +40,8 @@ coreneuron-nmodl:
 
 coreneuron-nmodl-ispc-fullsympy:
     compile_commands:
-        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop+nmodl+ispc)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance" mod/
+        - $(spack location -i neuron@develop%intel)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop+nmodl+ispc%intel)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance" mod/
     modignore:
         nocompile:
             cagk: bug with ispc constants \#433. Reenable this once it is solved
@@ -50,8 +50,8 @@ coreneuron-nmodl-ispc-fullsympy:
 
 coreneuron-nmodl-ispc-fullsympy-pade:
     compile_commands:
-        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop+nmodl+ispc)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance --pade" mod/
+        - $(spack location -i neuron@develop%intel)/bin/nrnivmodl mod/
+        - $(spack location -i coreneuron@develop+nmodl+ispc%intel)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance --pade" mod/
     modignore:
         nocompile:
             cagk: bug with ispc constants \#433. Reenable this once it is solved

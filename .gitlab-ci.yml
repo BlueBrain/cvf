@@ -55,18 +55,21 @@ neuron:
   extends: .spack_build
   variables:
     SPACK_PACKAGE: neuron
+    SPACK_PACKAGE_COMPILER: intel
     SPACK_PACKAGE_SPEC: build_type=Debug
 
 coreneuron:
   extends: .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
+    SPACK_PACKAGE_COMPILER: intel
     SPACK_PACKAGE_SPEC: ~report build_type=Debug
 
 coreneuron_nmodl:
   extends: .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
+    SPACK_PACKAGE_COMPILER: intel
     SPACK_PACKAGE_SPEC: +nmodl~report build_type=Debug
   needs: [nmodl]
   
@@ -74,6 +77,7 @@ coreneuron_nmodl_ispc:
   extends: .spack_build
   variables:
     SPACK_PACKAGE: coreneuron
+    SPACK_PACKAGE_COMPILER: intel
     SPACK_PACKAGE_SPEC: +nmodl+ispc~report build_type=Debug
   needs: [nmodl]
 
@@ -83,7 +87,7 @@ test:
     # Change to the working directory of the `venv` job
     - cd ${CVF_VENV_ROOT}
     - module load unstable git python-dev
-    - spack load nmodl@develop neuron@develop
+    - spack load nmodl@develop neuron@develop%intel
     - source venv/bin/activate
     - cvf_stdrun -d test/${MOD_FILES_PROJECT} ${CVF_MODELS_ROOT}/${MOD_FILES_PROJECT}/${MOD_FOLDER}
   parallel:
