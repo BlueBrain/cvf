@@ -70,7 +70,7 @@ class Simulation:
     def _worker_run(self, result, queue):
         logging.info(f"Run simulation: {result.modfile}")
 
-        self._load_libs()
+        self._load_libs("coreneuron" in result.run_name.lower())
 
         h.tstop = self.conf.tstop(result.protocol)
         logging.info(f"tstop: {h.tstop}")
@@ -107,14 +107,20 @@ class Simulation:
             except Full:
                 continue
 
-    def _load_libs(self):
+    def _load_libs(self, coreneuron_missing_error=False):
 
         try:
             nrn_lib = os.path.abspath(
                 glob.glob(os.path.join(self.working_dir, "x86_64", "libnrnmech.*"))[0]
             )
         except IndexError as e:
-            raise SimulationError("nrn_lib not found!") from e
+            raise SimulationError("libnrnmech.* not found!") from e
+        try:
+            _ = os.path.abspath(
+                glob.glob(os.path.join(self.working_dir, "x86_64", "special"))[0]
+            )
+        except IndexError as e:
+            raise SimulationError("NEURON special not found!") from e
         h.nrn_load_dll(nrn_lib)
 
         try:
@@ -125,7 +131,19 @@ class Simulation:
             )
             os.environ["CORENEURONLIB"] = corenrn_lib
         except IndexError as e:
-            pass
+            if coreneuron_missing_error:
+                raise SimulationError("libcorenrnmech.* not found!") from e
+            else:
+                pass
+        try:
+            _ = os.path.abspath(
+                glob.glob(os.path.join(self.working_dir, "x86_64", "special-core"))[0]
+            )
+        except IndexError as e:
+            if coreneuron_missing_error:
+                raise SimulationError("CoreNEURON special not found!") from e
+            else:
+                pass
 
     def _init_simulator(self, result):
         protocol = self.conf[result.protocol]

@@ -86,8 +86,8 @@ test:
   script:
     # Change to the working directory of the `venv` job
     - cd ${CVF_VENV_ROOT}
-    - module load unstable git python-dev
-    - spack load nmodl@develop neuron@develop%intel
+    - module load unstable git python-dev intel-oneapi-compilers
+    - spack load nmodl@develop+python neuron@develop%intel
     - source venv/bin/activate
     - cvf_stdrun -d test/${MOD_FILES_PROJECT} ${CVF_MODELS_ROOT}/${MOD_FILES_PROJECT}/${MOD_FOLDER}
   parallel:
