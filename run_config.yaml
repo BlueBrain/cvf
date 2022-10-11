@@ -29,7 +29,7 @@ coreneuron-mod2c:
 coreneuron-nmodl:
     compile_commands:
         - $(spack location -i neuron@develop%intel)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop+nmodl~ispc%intel)/bin/nrnivmodl-core -a "host --c passes --inline codegen --force" mod/
+        - $(spack location -i coreneuron@develop+nmodl%intel)/bin/nrnivmodl-core -a "host --c passes --inline codegen --force" mod/
     modignore:
         nocompile:
             cagk: Small discrepancy with neuron reported in nmodl issue \#432. Reenable this once it is solved
@@ -37,24 +37,3 @@ coreneuron-nmodl:
             TC_Ih_CaMod: sparse solver not supported by nmodl without sympy
     rtol: 0.0
     atol: 0.0
-
-coreneuron-nmodl-ispc-fullsympy:
-    compile_commands:
-        - $(spack location -i neuron@develop%intel)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop+nmodl+ispc%intel)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance" mod/
-    modignore:
-        nocompile:
-            cagk: bug with ispc constants \#433. Reenable this once it is solved
-    rtol: 1e-8
-    atol: 1e-5
-
-coreneuron-nmodl-ispc-fullsympy-pade:
-    compile_commands:
-        - $(spack location -i neuron@develop%intel)/bin/nrnivmodl mod/
-        - $(spack location -i coreneuron@develop+nmodl+ispc%intel)/bin/nrnivmodl-core -a "host --ispc passes --inline --const-folding codegen --force sympy --analytic --cse --conductance --pade" mod/
-    modignore:
-        nocompile:
-            cagk: bug with ispc constants \#433. Reenable this once it is solved
-    rtol: 0.01
-    atol: 1e-4
-

@@ -73,14 +73,6 @@ coreneuron_nmodl:
     SPACK_PACKAGE_SPEC: +nmodl~report build_type=Debug
   needs: [nmodl]
   
-coreneuron_nmodl_ispc:
-  extends: .spack_build
-  variables:
-    SPACK_PACKAGE: coreneuron
-    SPACK_PACKAGE_COMPILER: intel
-    SPACK_PACKAGE_SPEC: +nmodl+ispc~report build_type=Debug
-  needs: [nmodl]
-
 test:
   extends: .spack_test
   script:
@@ -105,4 +97,3 @@ test:
     - neuron
     - coreneuron
     - coreneuron_nmodl
-    - coreneuron_nmodl_ispc

@@ -24,7 +24,6 @@ In order to use CVF you need the various neuron and coreneurons that you are goi
 spack install neuron@develop~mpi
 spack install coreneuron@develop~mpi~report ^bison@3.4.2
 spack install coreneuron@develop+nmodl~mpi~report ^nmodl@develop ^bison@3.4.2
-spack install coreneuron@develop+nmodl+ispc~mpi~report ^nmodl@develop ^bison@3.4.2
 ```
 
 ### How to run CVF
