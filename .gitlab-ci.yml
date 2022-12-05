@@ -1,7 +1,4 @@
 variables:
-  CORENEURON_BRANCH:
-    description: Branch of CoreNEURON to build (CORENEURON_COMMIT and CORENEURON_TAG also possible)
-    value: master
   NEURON_BRANCH:
     description: Branch of NEURON to build (NEURON_COMMIT and NEURON_TAG also possible)
     value: master
@@ -56,21 +53,14 @@ neuron:
   variables:
     SPACK_PACKAGE: neuron
     SPACK_PACKAGE_COMPILER: intel
-    SPACK_PACKAGE_SPEC: build_type=Debug
+    SPACK_PACKAGE_SPEC: +coreneuron~nmodl~report build_type=Debug
 
-coreneuron:
+neuron_nmodl:
   extends: .spack_build
   variables:
-    SPACK_PACKAGE: coreneuron
+    SPACK_PACKAGE: neuron
     SPACK_PACKAGE_COMPILER: intel
-    SPACK_PACKAGE_SPEC: ~report build_type=Debug
-
-coreneuron_nmodl:
-  extends: .spack_build
-  variables:
-    SPACK_PACKAGE: coreneuron
-    SPACK_PACKAGE_COMPILER: intel
-    SPACK_PACKAGE_SPEC: +nmodl~report build_type=Debug
+    SPACK_PACKAGE_SPEC: +coreneuron+nmodl~report build_type=Debug
   needs: [nmodl]
   
 test:
@@ -79,7 +69,8 @@ test:
     # Change to the working directory of the `venv` job
     - cd ${CVF_VENV_ROOT}
     - module load unstable git python-dev intel-oneapi-compilers
-    - spack load nmodl@develop+python neuron@develop%intel
+    # Arbitrarily choose the NEURON build without NMODL for running CVF's Python
+    - spack load nmodl@develop+python "neuron@develop%intel~nmodl build_type=Debug"
     - source venv/bin/activate
     - cvf_stdrun -d test/${MOD_FILES_PROJECT} ${CVF_MODELS_ROOT}/${MOD_FILES_PROJECT}/${MOD_FOLDER}
   parallel:
@@ -95,5 +86,4 @@ test:
   needs:
     - venv
     - neuron
-    - coreneuron
-    - coreneuron_nmodl
+    - neuron_nmodl
