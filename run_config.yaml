@@ -14,22 +14,12 @@ neuron: #Base run. This name determines:
         #
         # Do not change it unless you know what you are doing.
     compile_commands:
-        - $(spack location -i neuron@develop%intel~nmodl build_type=Debug)/bin/nrnivmodl mod/
-
-coreneuron-mod2c:
-    compile_commands:
-        - $(spack location -i neuron@develop%intel+coreneuron~nmodl~report build_type=Debug)/bin/nrnivmodl mod/
-        - $(spack location -i neuron@develop%intel+coreneuron~nmodl~report build_type=Debug)/bin/nrnivmodl-core mod/
-    modignore:
-        nocompile:
-            NaV: sparse solver not supported with mod2c
-    rtol: 0.0
-    atol: 0.0
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
 
 coreneuron-nmodl:
     compile_commands:
-        - $(spack location -i neuron@develop%intel+coreneuron+nmodl~report build_type=Debug)/bin/nrnivmodl mod/
-        - $(spack location -i neuron@develop%intel+coreneuron+nmodl~report build_type=Debug)/bin/nrnivmodl-core -a "host --c passes --inline codegen --force" mod/
+        - $(spack location -i neuron@develop)/bin/nrnivmodl mod/
+        - $(spack location -i neuron@develop)/bin/nrnivmodl-core -a "host --c passes --inline codegen --force" mod/
     modignore:
         nocompile:
             cagk: Small discrepancy with neuron reported in nmodl issue \#432. Reenable this once it is solved
