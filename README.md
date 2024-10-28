@@ -43,6 +43,16 @@ CVF can be run in 2 ways:
     - Run your own python script (check `example.py` for inspirations). The functions exposed to public (in `channel
     -validation-framework/commands`) have python docstring to describe their functionalities
 
+### License
+
+See the [LICENSE](LICENSE.txt) file.
+
+## Funding and Acknowledgments
+
+The development of this software was supported by funding to the Blue Brain Project, a research center of the École polytechnique fédérale de Lausanne (EPFL), from the Swiss government’s ETH Board of the Swiss Federal Institutes of Technology.
+
+Copyright (c) 2023-2024 Blue Brain Project/EPFL
+
 
 
 
